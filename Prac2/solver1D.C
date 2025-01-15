@@ -37,31 +37,6 @@ void solver::run(){
     writeData("rho"); writeData("v"); writeData("p");
 };
 
-void solver::laxFriedrichs(){
-    for (int i = 0; i < nCells + 1; ++i) {
-
-        fluxes[i] = 0.5 * (flux(eos->consvToPrim(u[i])) + flux(eos->consvToPrim(u[i + 1]))) + 0.5 * (dx / dt) * (u[i] - u[i+1]);
-
-    }
-    std::cout << std::endl << "-----------------------fluxes above-------------------------" << std::endl;
-};
-
-void solver::Richt(){
-    for (int i = 0; i < nCells + 1; ++i) {
-        fluxes[i] = flux(eos->consvToPrim(laxFhalf(u[i],u[i+1])));
-    }
-    std::cout << std::endl << "-----------------------fluxes above-------------------------" << std::endl;
-};
-
-void solver::FORCE(){ // problem is probably with ghost cells / indexing
-
-    for (size_t i = 0; i < fluxes.size(); ++i) {
-        //std::cout << "finvect " << finvectLF(u[i]) << " " << finvectLF(u[i]) << std::endl;
-        fluxes[i] = 0.5*(flux(eos->consvToPrim(laxFhalf(u[i+nGhost-1],u[i+nGhost])))+LF(u[i+nGhost-1],u[i+nGhost])); // fluxes stored in conserved variable form
-    }
-    // print_arr(fluxes,0);
-    std::cout << std::endl << "-----------------------fluxes above-------------------------" << std::endl;
-};
 
 void solver::SLIC(){
     std::cout << "starting SLIC" << std::endl;
@@ -74,8 +49,10 @@ void solver::SLIC(){
 
     updUBars();
 
-    for (size_t i = 0; i < fluxes.size(); ++i) {
-        fluxes[i] = 0.5*(flux(eos->consvToPrim(laxFhalf(uBarRupd[i],uBarLupd[i+1])))+LF(uBarRupd[i],uBarLupd[i+1])); // fluxes stored in conserved variable form
+    for (size_t i = 0; i < fluxes1.size(); ++i) {
+        fluxes1[i] = 0.5*(flux(eos->consvToPrim(laxFhalf(u1BarRupd[i],u1BarLupd[i+1])))+LF(u1BarRupd[i],u1BarLupd[i+1])); // fluxes stored in conserved variable form
+        fluxes2[i] = 0.5*(flux(eos->consvToPrim(laxFhalf(u2BarRupd[i],u2BarLupd[i+1])))+LF(u2BarRupd[i],u2BarLupd[i+1])); // fluxes stored in conserved variable form
+
     }
 
     std::cout << std::endl << "-----------------------fluxes above-------------------------" << std::endl;
@@ -83,13 +60,27 @@ void solver::SLIC(){
 
 void solver::transmissiveBC(){
     if (alpha == 0){
-        for (int i = 0; i < nGhost; ++i){
-            uPlus1[i] = u[nGhost];
-            u[i] = u[nGhost];
-            uPlus1[nCells+2*nGhost-1-i] = u[nCells+nGhost-1];
-            u[nCells+2*nGhost-1-i] = u[nCells+nGhost-1];
+        for (int i = 0; i < nGhost; ++i){ // u BCs
+            u1Plus1[i] = u1[nGhost];
+            u1[i] = u1[nGhost];
+            u1Plus1[nCells+2*nGhost-1-i] = u1[nCells+nGhost-1];
+            u1[nCells+2*nGhost-1-i] = u1[nCells+nGhost-1];
+        }
+        for (int i = 0; i < nGhost; ++i){ // u BCs
+            u2Plus1[i] = u2[nGhost];
+            u2[i] = u2[nGhost];
+            u2Plus1[nCells+2*nGhost-1-i] = u2[nCells+nGhost-1];
+            u2[nCells+2*nGhost-1-i] = u2[nCells+nGhost-1];
+        }
+        for (int i = 0; i < nGhost; ++i){ // phi BCs
+            phiPlus1[i] = phi[nGhost];
+            phi[i] = phi[nGhost];
+            phiPlus1[nCells+2*nGhost-1-i] = phi[nCells+nGhost-1];
+            phi[nCells+2*nGhost-1-i] = phi[nCells+nGhost-1];
         }
     } else {
+        assert(0 != 0);
+        /*
         for (int i = 0; i < nGhost; ++i){
             for (int var = 0; var<3; ++var){
                 if (var == 0 || var == 2){
@@ -109,22 +100,42 @@ void solver::transmissiveBC(){
                 }
 
             }
-        }
+        } */
     }
 }
 
 void solver::pointsUpdate(){
     transmissiveBC();
 
-    for (std::vector<double>::size_type i = nGhost; i < u.size() - nGhost; ++i) {
-        uPlus1[i] = u[i] - (dt / dx) * (fluxes[i-nGhost+1] - fluxes[i-nGhost]); // flux[i + 1] and flux[i] for the update
+    for (std::vector<double>::size_type i = nGhost; i < u1.size() - nGhost; ++i) {
+        u1Plus1[i] = u1[i] - (dt / dx) * (fluxes1[i-nGhost+1] - fluxes1[i-nGhost]); // flux[i + 1] and flux[i] for the update
     }
+
+    for (std::vector<double>::size_type i = nGhost; i < u2.size() - nGhost; ++i) {
+        u2Plus1[i] = u2[i] - (dt / dx) * (fluxes2[i-nGhost+1] - fluxes2[i-nGhost]); // flux[i + 1] and flux[i] for the update
+    }
+
+    for (std::vector<double>::size_type i = nGhost; i < phi.size()-nGhost; ++i) {
+        double uVal = eos->consvToPrim(u1[i])[1];
+        /*if (phi[i]<=0){
+            uVal = eos->consvToPrim(u1[i])[1];
+        } else if (phi[i] > 0) {
+            uVal = eos->consvToPrim(u2[i])[1];
+        };*/
+        if (uVal >= 0){
+            phiPlus1[i] = phi[i] - uVal*(dt/dx)*(phi[i]-phi[i-1]);
+        } else {
+            phiPlus1[i] = phi[i] - uVal*(dt/dx)*(phi[i+1]-phi[i]);
+        }
+        
+    }
+
+    u1 = u1Plus1;
+    u2 = u2Plus1;
     
-    std::cout << std::endl << "-------------------------uplus1 above------------------------" << std::endl;
-    // for (int i = 0; i < u.size(); ++i) {
-    u = uPlus1;
+    phi = phiPlus1;
     // print_arr(u,1);
-    std::cout << "updated u" << std::endl;
+    std::cout << "updated u & phi" << std::endl;
     // }
 };
 
@@ -132,19 +143,19 @@ void solver::pointsUpdate(){
 
 void solver::sourceUpdate(){
     transmissiveBC();
-    std::vector< std::array<double,3> > sourceArr = sourceTerm(u,alpha);
+    std::vector< std::array<double,3> > sourceArr = sourceTerm(u1,alpha);
     std::cout << "printing source array" << std::endl;
     // print_arr(sourceArr,0);
 
-    for (std::vector<double>::size_type i = nGhost; i < u.size() - nGhost; ++i) {
-        uPlus1[i] = u[i] + dt * sourceArr[i-nGhost]; // flux[i + 1] and flux[i] for the update
+    for (std::vector<double>::size_type i = nGhost; i < u1.size() - nGhost; ++i) {
+        u1Plus1[i] = u1[i] + dt * sourceArr[i-nGhost]; // flux[i + 1] and flux[i] for the update
 
         //print_vect(uPlus1[i]);
     }
     
     std::cout << std::endl << "-------------------------source terms above------------------------" << std::endl;
     // for (int i = 0; i < u.size(); ++i) {
-    u = uPlus1;
+    u1 = u1Plus1;
     std::cout << "evolved source terms" << std::endl;
     // }
 };
@@ -194,14 +205,20 @@ std::array<double,3> solver::laxFhalf(std::array<double,3> ui, std::array<double
 // -------------- Slope limiting ---------------------------- //
 
 void solver::calcHalfSlopes(){
-    for (size_t i = 0; i < halfSlopes.size(); ++i){
-        halfSlopes[i] = u[i+nGhost-1]-u[i+nGhost-2];
+    for (size_t i = 0; i < halfSlopes1.size(); ++i){
+        halfSlopes1[i] = u1[i+nGhost-1]-u1[i+nGhost-2];
+    }
+    for (size_t i = 0; i < halfSlopes2.size(); ++i){
+        halfSlopes2[i] = u2[i+nGhost-1]-u2[i+nGhost-2];
     }
 };
 
 void solver::calcr(){
-    for (size_t i = 0; i < r.size(); ++i){
-        r[i] = elementDivide(halfSlopes[i],halfSlopes[i+1]);
+    for (size_t i = 0; i < r1.size(); ++i){
+        r1[i] = elementDivide(halfSlopes1[i],halfSlopes1[i+1]);
+    }
+    for (size_t i = 0; i < r2.size(); ++i){
+        r2[i] = elementDivide(halfSlopes2[i],halfSlopes2[i+1]);
     }
     //print_arr(r);
     std::cout << "calcd r" << std::endl;
@@ -209,17 +226,25 @@ void solver::calcr(){
 
 
 void solver::calcUBars(){ // calculates for all u except leftmost cell
-    for (size_t i = 0; i<uBarL.size(); ++i){
-        uBarL[i] = u[i+nGhost-1] - 0.5 * ( slopeLim(r[i]) * calcSlope(slopeWeight, halfSlopes[i], halfSlopes[i+1]) );
-        uBarR[i] = u[i+nGhost-1] + 0.5 * ( slopeLim(r[i]) * calcSlope(slopeWeight, halfSlopes[i], halfSlopes[i+1]) );
+    for (size_t i = 0; i<u1BarL.size(); ++i){
+        u1BarL[i] = u1[i+nGhost-1] - 0.5 * ( slopeLim(r1[i]) * calcSlope(slopeWeight, halfSlopes1[i], halfSlopes1[i+1]) );
+        u1BarR[i] = u1[i+nGhost-1] + 0.5 * ( slopeLim(r1[i]) * calcSlope(slopeWeight, halfSlopes1[i], halfSlopes1[i+1]) );
+    }
+    for (size_t i = 0; i<u2BarL.size(); ++i){
+        u2BarL[i] = u2[i+nGhost-1] - 0.5 * ( slopeLim(r2[i]) * calcSlope(slopeWeight, halfSlopes2[i], halfSlopes2[i+1]) );
+        u2BarR[i] = u2[i+nGhost-1] + 0.5 * ( slopeLim(r2[i]) * calcSlope(slopeWeight, halfSlopes2[i], halfSlopes2[i+1]) );
     }
 };
 
 
 void solver::updUBars(){
-    for (size_t i = 0; i<uBarLupd.size(); ++i){
-        uBarLupd[i] = uBarL[i]-0.5*(dt/dx)*(flux(eos->consvToPrim(uBarR[i]))-flux(eos->consvToPrim(uBarL[i])));
-        uBarRupd[i] = uBarR[i]-0.5*(dt/dx)*(flux(eos->consvToPrim(uBarR[i]))-flux(eos->consvToPrim(uBarL[i])));
+    for (size_t i = 0; i<u1BarLupd.size(); ++i){
+        u1BarLupd[i] = u1BarL[i]-0.5*(dt/dx)*(flux(eos->consvToPrim(u1BarR[i]))-flux(eos->consvToPrim(u1BarL[i])));
+        u1BarRupd[i] = u1BarR[i]-0.5*(dt/dx)*(flux(eos->consvToPrim(u1BarR[i]))-flux(eos->consvToPrim(u1BarL[i])));
+    }
+    for (size_t i = 0; i<u2BarLupd.size(); ++i){
+        u2BarLupd[i] = u2BarL[i]-0.5*(dt/dx)*(flux(eos->consvToPrim(u2BarR[i]))-flux(eos->consvToPrim(u2BarL[i])));
+        u2BarRupd[i] = u2BarR[i]-0.5*(dt/dx)*(flux(eos->consvToPrim(u2BarR[i]))-flux(eos->consvToPrim(u2BarL[i])));
     }
 };
 
@@ -308,8 +333,8 @@ void solver::print_vect(std::array<double,3> v){
 void solver::setDt(){
     double aMax = -1e14;
     std::cout << "setting dt" << std::endl;
-    for (std::vector<double>::size_type i = nGhost; i < u.size()-nGhost; ++i) {
-        aMax = std::max(aMax, std::fabs(eos->consvToPrim(u[i])[1])+eos->calcSoundSpeed(eos->consvToPrim(u[i])));
+    for (std::vector<double>::size_type i = nGhost; i < u1.size()-nGhost; ++i) {
+        aMax = std::max(aMax, std::max(std::fabs(eos->consvToPrim(u2[i])[1])+eos->calcSoundSpeed(eos->consvToPrim(u2[i])), std::fabs(eos->consvToPrim(u1[i])[1])+eos->calcSoundSpeed(eos->consvToPrim(u1[i]))));
     }
     dt = cour * dx / std::fabs(aMax);
 
@@ -351,15 +376,30 @@ solver::solver(double x_0, double x_1, double t0, double t1, int n_Cells, int n_
     nCells = n_Cells;
     nGhost = n_Ghosts;
     dx = (x1 - x0)/nCells;
-    u.resize(nCells+2*nGhost);
-    uPlus1.resize(nCells+2*nGhost);
-    fluxes.resize(nCells+1);
-    halfSlopes.resize(nCells+3);
-    r.resize(nCells+2); // r can only be defined for inner cells
-    uBarL.resize(nCells+2);
-    uBarR.resize(nCells+2);
-    uBarLupd.resize(nCells+2);
-    uBarRupd.resize(nCells+2);
+
+    phi.resize(nCells+2*nGhost);
+    phiPlus1.resize(nCells+2*nGhost);
+
+    u1Plus1.resize(nCells+2*nGhost);
+
+    u1.resize(nCells+2*nGhost);
+    fluxes1.resize(nCells+1);
+    halfSlopes1.resize(nCells+3);
+    r1.resize(nCells+2); // r can only be defined for inner cells
+    u1BarL.resize(nCells+2);
+    u1BarR.resize(nCells+2);
+    u1BarLupd.resize(nCells+2);
+    u1BarRupd.resize(nCells+2);
+    // fluid 2
+    u2Plus1.resize(nCells+2*nGhost);
+    u2.resize(nCells+2*nGhost);
+    fluxes2.resize(nCells+1);
+    halfSlopes2.resize(nCells+3);
+    r2.resize(nCells+2); // r can only be defined for inner cells
+    u2BarL.resize(nCells+2);
+    u2BarR.resize(nCells+2);
+    u2BarLupd.resize(nCells+2);
+    u2BarRupd.resize(nCells+2);
 
     sourceResult.resize(nCells);
 
@@ -386,9 +426,15 @@ double solver::get_dx()const{
     return dx;
 };
 
-void solver::init(std::vector< std::array<double,3> > init) {
-    assert(init.size() == u.size());
-    u = init;
+void solver::init(std::vector< std::array<double,3> > init1,std::vector< std::array<double,3> > init2) {
+    assert(init1.size() == u1.size() && init2.size() == u2.size());
+    u1 = init1;
+    u2 = init2;
+};
+
+void solver::phiInit(std::vector< double > init) {
+    assert(init.size() == phi.size());
+    phi = init;
 };
 
 // -------------------- writing functions --------------------- //
@@ -405,9 +451,9 @@ void solver::writeData(std::string varName) const{
         assert(writeFile.is_open());
         if (writeFile.is_open()){
             // writing data
-            for (std::vector<double>::size_type i=nGhost; i<(u.size()-nGhost);i++){
+            for (std::vector<double>::size_type i=nGhost; i<(u1.size()-nGhost);i++){
                 double x = x0 + (i-nGhost+0.5)*dx;
-                writeFile << x << " " << eos->consvToPrim(u[i])[varMap.at(varName)] << std::endl;
+                writeFile << x << " " << eos->consvToPrim(u1[i])[varMap.at(varName)] << " " << eos->consvToPrim(u2[i])[varMap.at(varName)] << " " << phi[i] << std::endl;
                 //std::cout << u[i] << " ";
             }
             writeFile.close();

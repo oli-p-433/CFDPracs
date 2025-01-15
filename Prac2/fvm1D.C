@@ -14,16 +14,16 @@
 int main(){
     int nCells = 500;
     double x0{0}, x1{1};
-    double startTime = 0.0, endTime = 5e-5;
+    double startTime = 0.0, endTime = 0.25;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
 
     // construct EOS object and give to sovler
-    stiffenedGas stiffgas(7.15,3e8,0);
-    //idealGas idgas(1.4);
+    //stiffenedGas stiffgas(7.15,3e8,0);
+    idealGas idgas(1.4);
     solver sim(x0,x1,startTime,endTime,nCells,2,cour);
-    sim.setEOS(&stiffgas);
+    sim.setEOS(&idgas);
 
     std::cout << "n ghost cells=" << sim.ghosts() << std::endl;
 
@@ -39,7 +39,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(5e-6);
+    sim.setWriteInterval(0.05);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,3> input){
@@ -50,71 +50,39 @@ int main(){
         return sim.minbee(input);
     }; // because fEuler isnt static
 
-    std::vector<std::array<double,3>> uInit; uInit.resize(sim.uPlus1.size());
+    std::vector<std::array<double,3>> u1Init; u1Init.resize(sim.u1Plus1.size());
+    std::vector<std::array<double,3>> u2Init; u2Init.resize(sim.u1Plus1.size());
+    std::vector<double> phiInit; phiInit.resize(sim.phiPlus1.size());
+
     std::cout << "n ghost cells=" << sim.ghosts() << std::endl;
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
+    for (std::vector<double>::size_type i=sim.ghosts(); i<u1Init.size()-sim.ghosts();i++){
+        double discPos = 0.5;
         double x = x0 + (i-sim.ghosts()+0.5)*sim.get_dx();
-        // for (int var = 0; var < 3; ++var){
-        //     if (var == 0 || var == 2){
-        //         uInit[i][var] = 1;
-        //     } else {
-        //         uInit[i][var] = 0;
-        //     }
-        // }
-        if (x <= 0.5){
-            for (int var = 0; var < 3; ++var){
-                if (var == 0){
-                    uInit[i][var] = 1500; //1500
-                } else if (var == 1){
-                    uInit[i][var] = 0;
-                } else {
-                    uInit[i][var] = 3000*101325; // 3000*101325
-                }
-            }
+        if (x <= discPos){
+            u1Init[i] = sim.eos->primToConsv({1,0,1});
+            u2Init[i] = sim.eos->primToConsv({0.125,0,0.1});
         } else {
-            for (int var = 0; var < 3; ++var){
-                if (var == 0){
-                    uInit[i][var] = 1000;
-                } else if (var == 1){
-                    uInit[i][var] = 0;
-                } else {
-                    uInit[i][var] = 101325;
-                }
-            }
+            u1Init[i] = sim.eos->primToConsv({0.125,0,0.1});
+            u2Init[i] = sim.eos->primToConsv({1,0,1});
         }
-
+        phiInit[i] = x-discPos;
     }
 
 
-    std::ofstream initFile1(dirname + "/rho/0");
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
-        double x = x0 + (i-sim.ghosts()+0.5)*sim.get_dx();
-        initFile1 << x << " " << uInit[i][0] << std::endl;
+    for (std::size_t var = 0; var < variables.size(); ++var) {
+        std::ofstream initFile(dirname + "/" + variables[var] + "/0");
+        for (std::vector<double>::size_type i = sim.ghosts(); i < u1Init.size() - sim.ghosts(); i++) {
+            double x = x0 + (i - sim.ghosts() + 0.5) * sim.get_dx();
+            initFile << x << " " << sim.eos->consvToPrim(u1Init[i])[var] << " " << sim.eos->consvToPrim(u2Init[i])[var] << " " << phiInit[i] << std::endl;
+        }
+        initFile.close();
     }
-    initFile1.close();
-
-    std::ofstream initFile2(dirname + "/v/0");
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
-        double x = x0 + (i-sim.ghosts()+0.5)*sim.get_dx();
-        initFile2 << x << " " << uInit[i][1] << std::endl;
-    }
-    initFile2.close();
-
-    std::ofstream initFile3(dirname + "/p/0");
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
-        double x = x0 + (i-sim.ghosts()+0.5)*sim.get_dx();
-        initFile3 << x << " " << uInit[i][2] << std::endl;
-    }
-    initFile3.close();
-    //std::cout << u[i] << " ";
     
 
     // Initialising u field: //
 
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
-        uInit[i] = sim.eos->primToConsv(uInit[i]);
-    }
-    sim.init(uInit);
+    sim.init(u1Init,u2Init);
+    sim.phiInit(phiInit);
 
     
     // for (int j = 0; j < uInit.size(); j++){

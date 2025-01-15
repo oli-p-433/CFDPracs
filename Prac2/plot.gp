@@ -5,5 +5,10 @@ print "Variable to plot: " . variable_name
 files = system("ls ./t/".variable_name."/[0-9]*")
 print("Files: " . files)
 
-plot for [file in files] file with lines
+unset key
+
+set style line 1 lt 1 lw 2  # Regular line (solid)
+set style line 2 lt 2 lw 2 dashtype 2   # Dotted line (lt 2 is the line type for dotted)
+
+plot for [file in files] file using 1:2 with lines, for [file in files] file using 1:3 with lines, for [file in files] file using 1:4 with lines
 pause -1 "Press Enter to exit"

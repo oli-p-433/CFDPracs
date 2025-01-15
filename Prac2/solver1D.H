@@ -6,9 +6,17 @@
 
 class solver{
     public:
-        std::vector< std::array<double,3> > uPlus1;
+        std::vector< std::array<double,3> > u1Plus1;
+        std::vector< std::array<double,3> > u2Plus1;
 
-        void init(std::vector< std::array<double,3> >);
+        // level set
+        std::vector< double > phi;
+        std::vector< double > phiPlus1;
+
+
+
+        void init(std::vector< std::array<double,3> >,std::vector< std::array<double,3> >);
+        void phiInit(std::vector<double>);
 
         void setDt();
         void laxFriedrichs();
@@ -93,15 +101,26 @@ class solver{
         int nGhost;
         double cSound;
 
-        std::vector< std::array<double,3> > u; //indexed as u[i][j] (ith array, jth row)
-        std::vector< std::array<double,3> > fluxes;
+        std::vector< std::array<double,3> > u1; //indexed as u[i][j] (ith array, jth row)
+        std::vector< std::array<double,3> > fluxes1;
 
-        std::vector< std::array<double,3> > halfSlopes;
-        std::vector< std::array<double,3> > r;
-        std::vector< std::array<double,3> > uBarL;
-        std::vector< std::array<double,3> > uBarR;
-        std::vector< std::array<double,3> > uBarLupd;
-        std::vector< std::array<double,3> > uBarRupd;
+        // second material
+        std::vector< std::array<double,3> > u2; //indexed as u[i][j] (ith array, jth row)
+        std::vector< std::array<double,3> > fluxes2;
+
+        std::vector< std::array<double,3> > halfSlopes1;
+        std::vector< std::array<double,3> > r1;
+        std::vector< std::array<double,3> > u1BarL;
+        std::vector< std::array<double,3> > u1BarR;
+        std::vector< std::array<double,3> > u1BarLupd;
+        std::vector< std::array<double,3> > u1BarRupd;
+        // material 2
+        std::vector< std::array<double,3> > halfSlopes2;
+        std::vector< std::array<double,3> > r2;
+        std::vector< std::array<double,3> > u2BarL;
+        std::vector< std::array<double,3> > u2BarR;
+        std::vector< std::array<double,3> > u2BarLupd;
+        std::vector< std::array<double,3> > u2BarRupd;
 
         std::vector< std::array<double,3> > sourceResult;
 
@@ -116,8 +135,6 @@ class solver{
         double cour;
 
         double writeInterval;
-
-        std::vector<double> errs;
 };
 
 std::array<double, 3> operator-(const std::array<double, 3>&, const std::array<double, 3>&);
