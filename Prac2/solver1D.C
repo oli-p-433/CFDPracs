@@ -116,12 +116,12 @@ void solver::pointsUpdate(){
     }
 
     for (std::vector<double>::size_type i = nGhost; i < phi.size()-nGhost; ++i) {
-        double uVal = eos->consvToPrim(u1[i])[1];
-        /*if (phi[i]<=0){
+        double uVal{0};
+        if (phi[i]<=0){
             uVal = eos->consvToPrim(u1[i])[1];
         } else if (phi[i] > 0) {
             uVal = eos->consvToPrim(u2[i])[1];
-        };*/
+        };
         if (uVal >= 0){
             phiPlus1[i] = phi[i] - uVal*(dt/dx)*(phi[i]-phi[i-1]);
         } else {
