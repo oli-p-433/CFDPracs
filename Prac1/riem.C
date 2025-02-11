@@ -147,9 +147,9 @@ std::array<double,3> riemann::exctRiemann(){ // states will be in primitive vari
     leftStar = solveRiem(pStar, state1, 1);
     rightStar = solveRiem(pStar, state2, 0);
 
-    if (leftStar[3] > 0 || state1[1]-calcSoundSpeed(state1,1) > 0){
+    if (leftStar[3] > 0 || state1[1]-calcSoundSpeed(state1,1) > 0){ // right moving left shock or u_L - cs_L > 0
         return state1;
-    } else if (rightStar[3] < 0 || state2[1]+calcSoundSpeed(state2,0) < 0){
+    } else if (rightStar[3] < 0 || state2[1]+calcSoundSpeed(state2,0) < 0){ // left moving right shock or (u_R+cs_R) < 0
         return state2;
     } else {
         double cL = calcSoundSpeed(state1,1);
@@ -157,15 +157,15 @@ std::array<double,3> riemann::exctRiemann(){ // states will be in primitive vari
         double cLStar = sqrt((leftStar[2]+pInf(1))*gamma(1)/leftStar[0]);
         double cRStar = sqrt((rightStar[2]+pInf(0))*gamma(0)/rightStar[0]);
 
-        if ((state1[1]-cL)*(leftStar[1]-cLStar) < 0){
+        if ((state1[1]-cL)*(leftStar[1]-cLStar) < 0){ // (u_L-c_L)*(u*L-c*L) < 0 - ie different signs; disc. is in left rarefaction
             return rareFan(state1,1);
-        } else if ((state2[1]+cR)*(rightStar[1]+cRStar) < 0){
+        } else if ((state2[1]+cR)*(rightStar[1]+cRStar) < 0){ // (u_R+c_R)*(u*R+c*R) < 0 - ie different signs; disc. is in right rarefaction
             return rareFan(state2,0);
         } else {
-            if (leftStar[1] < 0){
+            if (leftStar[1] > 0){ // u*L > 0 - right-moving contact disc.
                 std::array<double,3> result = {leftStar[0],leftStar[1],leftStar[2]};
                 return result;
-            } else {
+            } else { // u*L < 0 - left-moving contact disc.
                 std::array<double,3> result = {rightStar[0],rightStar[1],rightStar[2]};
                 return result;
             }
@@ -190,7 +190,7 @@ std::array<std::string,5> riemann::waveSignature(double pStar){
 }
 
 std::array<double,5> riemann::wavePositions(std::array<std::string,5> waveSig, double x_disc, std::array<double,4> lSolution, std::array<double,4> rSolution){
-
+    std::cout << "u*L = " << lSolution[1] << "endTime = " << endTime << "xDisc = " << x_disc << std::endl;
     std::unordered_map<std::string, double> calcWavePos = {
         {"NL", x0},
         {"NR", x1},
@@ -204,7 +204,7 @@ std::array<double,5> riemann::wavePositions(std::array<std::string,5> waveSig, d
         {"RL2", x_disc + (lSolution[1]-sqrt(gamma(1)*(lSolution[2]+pInf(1))/lSolution[0]))*endTime}, // v*_L - c*_L
         {"RR1", x_disc + (rSolution[1]+sqrt(gamma(0)*(rSolution[2]+pInf(0))/rSolution[0]))*endTime}, // v*_R + c*_R
         {"RR2", x_disc + (state2[1]+calcSoundSpeed(state2,0))*endTime}                     // vR + cR
-    };
+    };  
 
     std::array<double,5> result;
 
@@ -212,7 +212,10 @@ std::array<double,5> riemann::wavePositions(std::array<std::string,5> waveSig, d
         std::string sig = waveSig[i];
         result[i] = calcWavePos[sig];
     };
-    
+    for (double i : result){
+        std::cout << i << " ";
+    }
+    std::cout << std::endl;
     return result;
 };
 

@@ -12,9 +12,9 @@ class EOS {
         virtual std::array<double,3> primToConsv(const std::array<double,3>)const = 0;
         virtual std::array<double,3> consvToPrim(const std::array<double,3>)const = 0;
 
-        EOS(double);
+        EOS(double); // constructor
 
-        virtual ~EOS() = default;
+        virtual ~EOS() = default; // (virtual) destructor
 };
 
 class idealGas : public EOS {

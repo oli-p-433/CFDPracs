@@ -3,8 +3,8 @@
 # Variables
 COMPILER=g++
 DEBUG_FLAGS="-O3"          # -g for debug info, -O0 to disable optimizations
-OUTPUT_EXECUTABLE="fvm1D" # Name of the output executable
-SOURCE_FILES="solver1D.C fvm1D.C EOS.C"  # Source files
+OUTPUT_EXECUTABLE="GFM" # Name of the output executable
+SOURCE_FILES="solverGFM.C GFM.C EOS.C fluid.C"  # Source files
 INCLUDE_PATHS="-I./include"    # If you have any include directories, add them here
 LIBRARIES=""                   # If you need to link any libraries, specify them here
 
