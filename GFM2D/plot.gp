@@ -1,0 +1,21 @@
+# Inform the user what variable is being plotted
+print "Variable to plot: " . variable_name
+
+# Dynamically construct the file path based on the variable name
+files = system("ls ./".directory_name."/".variable_name."/[0-9]*")
+#print("Files: " . files)
+last_file = word(files, words(files))
+exact_file = system("ls ./".directory_name."/".variable_name."Exact/[0-9]*")
+unset key
+
+set style line 1 lt 1 lw 2  # Regular line (solid)
+set style line 2 lt 2 lw 2 dashtype 2   # Dotted line (lt 2 is the line type for dotted)
+#set yrange [0:1.5]
+
+#plot for [file in files] file using 1:($4 < 0 ? $2 : 1/0) with lines,for [file in files] file using  1:($4 > 0 ? $3 : 1/0) with lines, \
+#for [file in files] file using 1:4 with lines
+plot last_file using 1:($4 < 0 ? $2 : 1/0),last_file using  1:($4 > 0 ? $3 : 1/0), \
+exact_file with lines, \
+#last_file using 1:4 with lines
+pause -1 "Press Enter to exit"
+
