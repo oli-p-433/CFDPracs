@@ -15,6 +15,7 @@
 
 int main(){
     int nCells = 64;
+    int nGhost = 2;
     double x0{0}, x1{1};
     double y0{0}, y1{1};
     double startTime = 0.0, endTime = 0.25;
@@ -26,7 +27,7 @@ int main(){
     idealGas idgas1(1.4); idealGas idgas2(1.4);
     std::array<EOS*,2> materials = {&idgas1,&idgas2};
 
-    solver sim(x0,x1,y0,y1,startTime,endTime,nCells,2,cour,1.4);
+    solver sim(x0,x1,y0,y1,startTime,endTime,nCells,nGhost,cour,1.4);
     sim.setEOS(materials);
     std::cout << "n ghost cells=" << sim.ghosts() << std::endl;
 
@@ -55,16 +56,18 @@ int main(){
         return sim.minbee(input);
     }; // because fEuler isnt static
 
-    std::vector< std::vector<std::array<double,4>>> uInit;
+    std::vector< std::vector<std::array<double,4>>> uInit1, uInit2;
+    std::vector< std::vector<double>> phiInit;
     // resizing:
-    resize2D(sim.uPlus1.size(),sim.uPlus1.size(),uInit); // resizes number of rows
-
+    resize2D(nCells+2*nGhost,nCells+2*nGhost,uInit1); resize2D(nCells+2*nGhost,nCells+2*nGhost,uInit2); // resizes number of rows
+    solver::resize2D(nCells+2*nGhost,nCells+2*nGhost,phiInit); 
 
     std::cout << "n ghost cells=" << sim.ghosts() << std::endl;
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
+    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit1.size()-sim.ghosts();i++){
         double y = y0 + (i-sim.ghosts()+0.5)*sim.get_dy();
-        for (std::vector<double>::size_type j=sim.ghosts(); j<uInit.size()-sim.ghosts();j++){
+        for (std::vector<double>::size_type j=sim.ghosts(); j<uInit1.size()-sim.ghosts();j++){
             double x = x0 + (j-sim.ghosts()+0.5)*sim.get_dx();
+            phiInit[i][j] = x - 0.5;
             
             /*
             if (x > 0.5 && y > 0.5){ 
@@ -79,21 +82,29 @@ int main(){
             */
             
 
-           
-            if (x<=0.4){ 
-                uInit[i][j] = sim.set_vals(1,0,0,1);
-            } else {
-                uInit[i][j] = sim.set_vals(0.125,0,0,0.1);
-            }
-            
-            
             /*
-            if (x+y<1){
-                uInit[i][j] = sim.set_vals(1,0,0,1);
+            if (x<=0.5){ 
+                uInit1[i][j] = sim.set_vals(1,0,0,1);
+                uInit2[i][j] = sim.set_vals(1,0,0,1);
+
             } else {
-                uInit[i][j] = sim.set_vals(0.125,0,0,0.1);
+                uInit1[i][j] = sim.set_vals(0.125,0,0,0.1);
+                uInit2[i][j] = sim.set_vals(0.125,0,0,0.1);
             }
             */
+            
+            //std::cout << phiInit[i][j] << " ";
+            
+            
+            
+            if (x+y<1){
+                uInit1[i][j] = sim.set_vals(1,0,0,1);
+                uInit2[i][j] = sim.set_vals(1,0,0,1);
+            } else {
+                uInit1[i][j] = sim.set_vals(0.125,0,0,0.1);
+                uInit2[i][j] = sim.set_vals(0.125,0,0,0.1);
+            }
+            
         }
 
     }
@@ -105,29 +116,28 @@ int main(){
 
     for (std::size_t var = 0; var < sim.variables.size(); ++var) {
         std::ofstream initFile(dirname + "/" + sim.variables[var] + "/0");
-        for (std::vector<double>::size_type i = sim.ghosts(); i < uInit.size() - sim.ghosts(); i++) {
+        for (std::vector<double>::size_type i = sim.ghosts(); i < uInit1.size() - sim.ghosts(); i++) {
             double x = x0 + (i - sim.ghosts() + 0.5) * sim.get_dx();
-            for (std::vector<double>::size_type j=sim.ghosts(); j<uInit.size()-sim.ghosts();j++){
+            for (std::vector<double>::size_type j=sim.ghosts(); j<uInit1.size()-sim.ghosts();j++){
                 double y = y0 + (j-sim.ghosts() + 0.5) * sim.get_dy();
-                initFile << x << " " << y << " " << sim.eos[0]->consvToPrim(uInit[i][j])[var] << std::endl;
+                initFile << x << " " << y << " " << sim.eos[0]->consvToPrim(uInit1[i][j])[var] << " " << sim.eos[1]->consvToPrim(uInit2[i][j])[var] << " " << phiInit[i][j] << std::endl;
             }
         }
         initFile.close();
     }
 
+    // Initialising u fields: //
 
-
-
-
-
-    // Initialising u field: //
-
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
-        for (std::vector<double>::size_type j=sim.ghosts(); j<uInit.size()-sim.ghosts();j++){
-            uInit[i][j] = sim.eos[0]->primToConsv(uInit[i][j]);
+    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit1.size()-sim.ghosts();i++){
+        for (std::vector<double>::size_type j=sim.ghosts(); j<uInit1.size()-sim.ghosts();j++){
+            uInit1[i][j] = sim.eos[0]->primToConsv(uInit1[i][j]);
+            uInit2[i][j] = sim.eos[1]->primToConsv(uInit2[i][j]);
         }
     }
-    sim.init(uInit);
+
+    sim.init(uInit1,sim.get_fluid(0)); sim.init(uInit2,sim.get_fluid(1));
+    sim.phiInit(phiInit);
+
 
     // Calculating exact result with exact riemann solver
 

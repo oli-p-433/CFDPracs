@@ -17,33 +17,32 @@ class solver{
 
         std::vector<std::string> variables;
 
-        std::vector< std::vector< std::array<double,4> > > uPlus1;
-
-        void init(std::vector< std::vector< std::array<double,4> > >);
+        void init(std::vector< std::vector< std::array<double,4> > >, fluid& fluid);\
+        void phiInit(std::vector< std::vector < double > >);
 
         void setDt();
         void laxFriedrichs();
         std::array<double,4> fBurgersLF(std::array<double,4>)const;
         std::array<double,4> finvectLF(std::array<double,4>)const;
         std::array<double,4> fEuler(std::array<double,4>,EOS*);
-        void Richt();
-        void FORCE();
-        void SLIC();
-        void MUSCL();
+
+        void SLIC(fluid&);
+        void MUSCL(fluid&);
         std::array<double,4> laxFhalf(const std::array<double,4>, const std::array<double,4>)const;
         std::array<double,4> LF(const std::array<double,4>, const std::array<double,4>)const;
-        void pointsUpdate();
+        void pointsUpdate(fluid&);
+        void phiUpdate();
         void run();
         double calcSoundSpeed(std::array<double,4>);
 
         std::array<double,4> riemannSolver(std::array<double,4>,std::array<double,4>);
 
         // slope limiting
-        void calcHalfSlopes();
-        void calcr();
+        void calcHalfSlopes(fluid&);
+        void calcr(fluid&);
         std::array<double,4> static calcSlope(double omega, std::array<double,4> slopeleft, std::array<double,4> sloperight);
-        void calcUBars();
-        void updUBars();
+        void calcUBars(fluid&);
+        void updUBars(fluid&);
         std::function<std::array<double,4>(std::array<double,4>)> slopeLim;
         
         std::array<double,4> minbee(std::array<double,4>);
@@ -51,8 +50,9 @@ class solver{
 
         //
 
-        void transmissiveBC();
-        void cylTransmissiveBC();
+        void transmissiveBC(fluid&);
+        void cylTransmissiveBC(fluid&);
+        void phiBC();
 
         std::function<std::array<double,4>(std::array<double,4>,EOS*)> flux;
 
@@ -60,9 +60,11 @@ class solver{
         bool checkWrite;
         void writeData(std::string) const;
 
+        // getters
         int ghosts();
         double get_dx()const;
         double get_dy()const;
+        fluid& get_fluid(bool);
 
 
         double dt;
@@ -81,6 +83,7 @@ class solver{
         static void print_vect(std::vector < std::array<double,4> >);
         static void print_state(std::array<double,4>);
         static std::array<double,4> set_vals(double,double,double,double);
+        static void resize2D(int,int,std::vector < std::vector < double >>&);
 
         // Source term modelling
 
@@ -105,24 +108,9 @@ class solver{
 
         fluid fluid1, fluid2; // Add these lines
 
-        std::vector< std::vector< std::array<double,4> > > u; //indexed as u[i][j] (ith row, jth column)
-        std::vector< std::vector< std::array<double,4> > > fluxesX;
-        std::vector< std::vector< std::array<double,4> > > fluxesY;
-
-        std::vector< std::vector< std::array<double,4> > > halfSlopesX;
-        std::vector< std::vector< std::array<double,4> > > halfSlopesY;
-        std::vector< std::vector< std::array<double,4> > > rX;
-        std::vector< std::vector< std::array<double,4> > > rY;
-        std::vector< std::vector< std::array<double,4> > > uBarLX;
-        std::vector< std::vector< std::array<double,4> > > uBarLY;
-        std::vector< std::vector< std::array<double,4> > > uBarRX;
-        std::vector< std::vector< std::array<double,4> > > uBarRY;
-        std::vector< std::vector< std::array<double,4> > > uBarLupdX;
-        std::vector< std::vector< std::array<double,4> > > uBarLupdY;
-        std::vector< std::vector< std::array<double,4> > > uBarRupdX;
-        std::vector< std::vector< std::array<double,4> > > uBarRupdY;
-
-        std::vector< std::vector< std::array<double,4> > > sourceResult;
+        // level set
+        std::vector< std::vector < double > > phi;
+        std::vector< std::vector < double > > phiPlus1;
 
 
         double x0;
