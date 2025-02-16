@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "solver.C": "cpp",
+        "fluid.C": "cpp"
+    }
+}

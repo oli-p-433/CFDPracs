@@ -5,6 +5,7 @@ fluid::fluid(int n_Cells, int n_Ghosts)
 
     resizef2D(nCells + 2 * nGhost, nCells + 2 * nGhost, u);
     resizef2D(nCells + 2 * nGhost, nCells + 2 * nGhost, uPlus1);
+    resizef2D(nCells + 2 * nGhost, nCells + 2 * nGhost, nDotGradPhi);
     resizef2D(nCells + 2, nCells + 1, fluxesX);
     resizef2D(nCells + 1, nCells + 2, fluxesY);
     resizef2D(nCells + 2, nCells + 3, halfSlopesX);
@@ -20,6 +21,8 @@ fluid::fluid(int n_Cells, int n_Ghosts)
     resizef2D(nCells + 2, nCells + 2, uBarRupdX);
     resizef2D(nCells + 2, nCells + 2, uBarRupdY);
     resizef2D(nCells, nCells, sourceResult);
+
+
 }
 
 void fluid::resizef2D(size_t rows, size_t cols, std::vector<std::vector<std::array<double, 4>>>& vec) {

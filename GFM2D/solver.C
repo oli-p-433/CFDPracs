@@ -15,9 +15,27 @@ void solver::run(){
 
     int splitFlip = 0;
     do{
+        this->findBoundary();
+        //std::cout << "boundary found" << std::endl;
+        this->calcPhiGrads();
+        //std::cout << "phi grads calculated" << std::endl;
+        this->calcInterface();
+        //std::cout << "interface calculated" << std::endl;
+        this->interpInterfaceStates();
+        //std::cout << "interface states interpolated" << std::endl;
+        this->interfaceRiem();
+        //std::cout << "interface riem" << std::endl;
+        this->resolveVelocities();
+        //std::cout << "resolved velocities" << std::endl;
+        this->calcStarStates();
+        //std::cout << "star states calculated" << std::endl;
+        this->setGhostFluids();
+        std::cout << "uExtrap evolved" << std::endl;
+        writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
+
+
         this->setDt();
 
-        std::cout << "dt is" << dt << std::endl;
         std::cout << "time is " << time << std::endl;
 
         transmissiveBC(fluid1);
@@ -31,31 +49,34 @@ void solver::run(){
         splitFlip++;
         if (splitFlip%2 == 0){
             direction = XDIR;
-            this->MUSCL(fluid1);
+            this->MUSCL(fluid1,eos[0]);
             this->pointsUpdate(fluid1);
-            this->MUSCL(fluid2);
+            this->MUSCL(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
             direction = YDIR;
-            this->MUSCL(fluid1);
+            this->MUSCL(fluid1,eos[0]);
             this->pointsUpdate(fluid1);
-            this->MUSCL(fluid2);
+            this->MUSCL(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
         } else {
             direction = YDIR;
-            this->MUSCL(fluid1);
+            this->MUSCL(fluid1,eos[0]);
             this->pointsUpdate(fluid1);
-            this->MUSCL(fluid2);
+            this->MUSCL(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
             direction = XDIR;
-            this->MUSCL(fluid1);
+            this->MUSCL(fluid1,eos[0]);
             this->pointsUpdate(fluid1);
-            this->MUSCL(fluid2);
+            this->MUSCL(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
         };
         std::cout << "points updated" << std::endl;
 
         transmissiveBC(fluid1);
         transmissiveBC(fluid2);
+
+        this->interfaceCells={};
+        this->interfaceStates={};
 
         //this->sourceUpdate();
 
@@ -69,37 +90,199 @@ void solver::run(){
     writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 };
 
-void solver::SLIC(fluid& fluid){
-
-    calcHalfSlopes(fluid); // -------------------------------------------- WIP
-
-    calcr(fluid);
-
-    calcUBars(fluid);
-
-    updUBars(fluid); //-----------!!!!!!!!!!!!!!!!
-
-    if (direction == XDIR){
-        for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
-            for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
-                fluid.fluxesX[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1])),eos[0])+LF(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1])); // fluxes stored in conserved variable form
+void solver::findBoundary(){ // checks for change in sign of level set. emplaces indices of cell with phi <= 0.
+    for (size_t i = nGhost; i < phi.size()-nGhost-1; ++i) {  // Loop through all cells (except last)
+        for (size_t j = nGhost; j < phi.size()-nGhost-1; ++j){
+            if (phi[i][j] * phi[i+1][j] < 0 || phi[i][j] * phi[i][j+1] < 0) {  // Sign change detected
+                //std::cout << phi[i] << " " << phi[i+1] << std::endl;
+                if (phi[i][j] <= 0){
+                    std::array<int,2> cell = {i,j};
+                    interfaceCells.push_back(cell);
+                } else if (phi[i][j] > 0){
+                    if (phi[i+1][j] < 0){
+                        std::array<int,2> cell = {i+1,j};
+                        interfaceCells.push_back(cell);
+                    } else if (phi[i][j+1] < 0){
+                        std::array<int,2> cell = {i,j+1};
+                        interfaceCells.push_back(cell);
+                    }
+                }
+                //std::cout << "interface at cell " << i << std::endl; 
             }
         }
-    } else if (direction == YDIR){
-        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { 
-            for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
-                fluid.fluxesY[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j])),eos[0])+LF(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j])); // fluxes stored in conserved variable form
+    };
+    int n = phi.size()-nGhost-1;
+    if (phi[n-1][n] * phi[n][n] < 0){ // corner case
+        std::array<int,2> cell = (phi[n][n]>0) ? std::array<int,2>{n-1,n} : std::array<int,2>{n,n};
+        interfaceCells.push_back(cell);
+    }
+    if (phi[n][n-1] * phi[n][n] < 0){
+        std::array<int,2> cell = (phi[n][n]>0) ? std::array<int,2>{n,n-1} : std::array<int,2>{n,n};
+        interfaceCells.push_back(cell);
+    }
+    interfaceStates.resize(interfaceCells.size());
+    interfaceNormals.resize(interfaceCells.size());
+    interfacePositions.resize(interfaceCells.size());
+    resolvedVelocities.resize(interfaceCells.size());
+    riemInterfaceStates.resize(interfaceCells.size());
+    starStates.resize(interfaceCells.size());
+    resize2Dc(nCells+2*nGhost,nCells+2*nGhost,uExtrap);
+    
+}
+
+void solver::calcPhiGrads(){
+    for (size_t i = 0; i < interfaceCells.size(); ++i){
+        int x = interfaceCells[i][1];
+        int y = interfaceCells[i][0];
+        double phi_y = (phi[x+1][y]-phi[x-1][y])/(2*dy);
+        double phi_x = (phi[x][y+1]-phi[x][y-1])/(2*dx);
+        std::array<double,2> grad = {phi_x/(sqrt(phi_x*phi_x+phi_y*phi_y)),phi_y*(sqrt(phi_x*phi_x+phi_y*phi_y))};
+        interfaceNormals[i] = grad;
+    }
+}
+
+void solver::calcInterface(){
+    for (size_t i = 0; i < interfaceCells.size(); ++i){
+        double x_i = x0 + interfaceCells[i][1]*dx;
+        double y_i = y0 + interfaceCells[i][0]*dx;
+        double x = x_i - phi[interfaceCells[i][0]][interfaceCells[i][1]]*interfaceNormals[i][0];
+        double y = y_i - phi[interfaceCells[i][0]][interfaceCells[i][1]]*interfaceNormals[i][1];
+        std::array<double,2> lPos = {x+1.5*dx*interfaceNormals[i][0],y+1.5*dy*interfaceNormals[i][1]};
+        std::array<double,2> rPos = {x-1.5*dx*interfaceNormals[i][0],y-1.5*dy*interfaceNormals[i][1]};
+        interfacePositions[i] = {lPos,rPos};
+    }
+}
+
+void solver::interpInterfaceStates(){
+    for (size_t i = 0; i < interfacePositions.size(); ++i){
+        std::array<double,4> lState = bilinear(interfacePositions[i][0][0],interfacePositions[i][0][1],fluid1);
+        std::array<double,4> rState = bilinear(interfacePositions[i][1][0],interfacePositions[i][1][1],fluid2);
+        
+        interfaceStates[i] = {lState,rState};
+    }
+}
+
+void solver::resolveVelocities(){
+    for (size_t i=0; i<interfaceStates.size(); ++i){
+        double vNormL = interfaceStates[i][0][1]*interfaceNormals[i][0]+interfaceStates[i][0][2]*interfaceNormals[i][1];
+        double vNormR = interfaceStates[i][1][1]*interfaceNormals[i][0]+interfaceStates[i][1][2]*interfaceNormals[i][1];
+        double vTanL = -interfaceStates[i][0][1]*interfaceNormals[i][1]+interfaceStates[i][0][2]*interfaceNormals[i][0];
+        double vTanR = -interfaceStates[i][1][1]*interfaceNormals[i][1]+interfaceStates[i][1][2]*interfaceNormals[i][0];
+
+        std::array<double,2> vL = {vNormL,vTanL};
+        std::array<double,2> vR = {vNormR,vTanR};
+        resolvedVelocities[i] = {vL,vR};
+    }
+}
+
+void solver::interfaceRiem(){
+    for (size_t i=0; i<interfaceStates.size(); ++i){
+        std::array<double,4> lState = {interfaceStates[i][0][0],resolvedVelocities[i][0][0],resolvedVelocities[i][0][1],interfaceStates[i][0][3]};  
+        std::array<double,4> rState = {interfaceStates[i][1][0],resolvedVelocities[i][1][0],resolvedVelocities[i][1][1],interfaceStates[i][1][3]};
+        //print_state(lState);
+        //print_state(rState);
+
+        riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),eos[0]->consvToPrim(lState),eos[1]->consvToPrim(rState),1,1,0.5,0.12,100,0,0); // need p_inf setup
+        std::array<double,4> result = solution.exctRiemann();
+        riemInterfaceStates[i] = result;
+        //solution.exctRiemann();
+    }
+}
+
+void solver::calcStarStates(){
+    for (size_t i=0; i<interfaceStates.size(); ++i){
+        // riemInterfaceStates[i] = {rho,v*_n,v*_t,p}
+        std::array<double,4> sL = interfaceStates[i][0];
+        std::array<double,4> sR = interfaceStates[i][1];
+        double utLx = sL[UX]-(sL[UX]*interfaceNormals[i][0]+sL[UY]*interfaceNormals[i][1])*interfaceNormals[i][0];
+        double utLy = sL[UY]-(sL[UX]*interfaceNormals[i][0]+sL[UY]*interfaceNormals[i][1])*interfaceNormals[i][1];
+        double utRx = sR[UX]-(sR[UX]*interfaceNormals[i][0]+sR[UY]*interfaceNormals[i][1])*interfaceNormals[i][0];
+        double utRy = sR[UY]-(sR[UX]*interfaceNormals[i][0]+sR[UY]*interfaceNormals[i][1])*interfaceNormals[i][1];
+        
+        double uLStarx = riemInterfaceStates[i][1]*interfaceNormals[i][0]+utLx;
+        double uLStary = riemInterfaceStates[i][1]*interfaceNormals[i][1]+utLy;
+        double uRStarx = riemInterfaceStates[i][1]*interfaceNormals[i][0]+utRx;
+        double uRStary = riemInterfaceStates[i][1]*interfaceNormals[i][1]+utRy;
+
+        std::array<double,4> uStarL = {riemInterfaceStates[i][0],uLStarx,uLStary,riemInterfaceStates[i][3]};
+        std::array<double,4> uStarR = {riemInterfaceStates[i][0],uRStarx,uRStary,riemInterfaceStates[i][3]};
+        std::array<std::array<double,4>,2> res = {uStarL,uStarR};
+        starStates[i] = res;
+    }
+}
+
+void solver::calcPhiNormals(){
+    resize2Db(nCells+2*nGhost,nCells+2*nGhost,phiNormals);
+    for (size_t i = nGhost; i < nCells+nGhost; ++i){
+        for (size_t j = nGhost; j < nCells+nGhost; ++j){
+            double phi_y = (phi[i+1][j]-phi[i-1][j])/(2*dy);
+            double phi_x = (phi[i][j+1]-phi[i][j-1])/(2*dx);
+            std::array<double,2> grad = {phi_x/(sqrt(phi_x*phi_x+phi_y*phi_y)),phi_y*(sqrt(phi_x*phi_x+phi_y*phi_y))};
+            phiNormals[i][j] = grad;
+        }
+    }
+}
+
+void solver::setInterface(){
+    
+    // setting uExtrap to the ghost fluids
+
+    for (size_t i = 0; i<starStates.size(); ++i){
+        fluid1.u[interfaceCells[i][0]][interfaceCells[i][1]] = starStates[i][0]; // interface states set to u*L
+        if (phi[interfaceCells[i][0]+1][interfaceCells[i][1]] > 0){ // surrounding states set to u*R
+            fluid2.u[interfaceCells[i][0]+1][interfaceCells[i][1]] = starStates[i][1];
+        } else if (phi[interfaceCells[i][0]][interfaceCells[i][1]+1] > 0){
+            fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]+1] = starStates[i][1];
+        } else if (phi[interfaceCells[i][0]-1][interfaceCells[i][1]] > 0){
+            fluid2.u[interfaceCells[i][0]-1][interfaceCells[i][1]] = starStates[i][1];
+        } else if (phi[interfaceCells[i][0]][interfaceCells[i][1]-1] > 0){
+            fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]-1] = starStates[i][1];
+        }
+    }
+}
+
+void solver::calcnDotPhiNormals(fluid& fluid){
+    resize2Dc(nCells+2*nGhost,nCells+2*nGhost,nDotGradPhi);
+    for (size_t i = nGhost; i < nCells+nGhost; ++i){
+        for (size_t j = nGhost; j < nCells+nGhost; ++j){
+            std::array<double,4> xCom, yCom;
+            for (int var = 0; var < 4; ++var){
+                xCom[var] = (phiNormals[i][j][0] > 0) ? phiNormals[i][j][0]*(fluid.u[i][j][var]-fluid.u[i][j-1][var])/dx : phiNormals[i][j][0]*(fluid.u[i][j+1][var]-fluid.u[i][j][var])/dx;
+                yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid.u[i][j][var]-fluid.u[i-1][j][var])/dy : phiNormals[i][j][1]*(fluid.u[i+1][j][var]-fluid.u[i][j][var])/dy;
+                fluid.nDotGradPhi[i][j] = xCom + yCom;
             }
         }
     }
 }
 
-std::array<double,4> solver::riemannSolver(std::array<double,4> left,std::array<double,4> right){
-    riemann solution(eos[0]->get_gamma(),eos[0]->get_gamma(),eos[0]->consvToPrim(left),eos[0]->consvToPrim(right),direction,0,1,0.5,1,2,0,0);
-    return solution.exctRiemann();
+void solver::setGhostFluids(){
+    /*
+    WRONG - currently have extrapolation going the wrong direction
+    (into the real fluid rather than ghost fluid)
+    Need work directly with the ghost fluids
+    */
+    calcPhiNormals();
+    for (int iter = 0; iter < 21; ++iter){
+        setInterface();
+        calcnDotPhiNormals(fluid1);
+        calcnDotPhiNormals(fluid2);
+        for (size_t i = nGhost; i < nCells+nGhost; ++i){
+            for (size_t j = nGhost; j < nCells+nGhost; ++j){
+                fluid1.u[i][j] = fluid1.u[i][j] - (phi[i][j]>0)*fluid1.nDotGradPhi[i][j];
+                fluid2.u[i][j] = fluid2.u[i][j] - (phi[i][j]<=0)*fluid2.nDotGradPhi[i][j];
+            }
+        }
+    }
+
 }
 
-void solver::MUSCL(fluid& fluid){
+
+
+
+
+
+
+void solver::SLIC(fluid& fluid, EOS* eos){
 
     calcHalfSlopes(fluid); 
 
@@ -107,18 +290,48 @@ void solver::MUSCL(fluid& fluid){
 
     calcUBars(fluid);
 
-    updUBars(fluid);
+    updUBars(fluid,eos); 
 
     if (direction == XDIR){
         for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
-                fluid.fluxesX[i][j] = flux(riemannSolver(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1]),eos[0]);
+                fluid.fluxesX[i][j] = 0.5*(flux(eos->consvToPrim(laxFhalf(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1],eos)),eos)+LF(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1],eos)); // fluxes stored in conserved variable form
+            }
+        }
+    } else if (direction == YDIR){
+        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { 
+            for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
+                fluid.fluxesY[i][j] = 0.5*(flux(eos->consvToPrim(laxFhalf(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j],eos)),eos)+LF(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j],eos)); // fluxes stored in conserved variable form
+            }
+        }
+    }
+}
+
+std::array<double,4> solver::riemannSolver(std::array<double,4> left,std::array<double,4> right){
+    riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),eos[0]->consvToPrim(left),eos[1]->consvToPrim(right),direction,0,1,0.5,1,2,0,0);
+    return solution.exctRiemann();
+}
+
+void solver::MUSCL(fluid& fluid, EOS* eos){
+
+    calcHalfSlopes(fluid); 
+
+    calcr(fluid);
+
+    calcUBars(fluid);
+
+    updUBars(fluid,eos);
+
+    if (direction == XDIR){
+        for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
+            for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
+                fluid.fluxesX[i][j] = flux(riemannSolver(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1]),eos);
             }
         }
     } else if (direction == YDIR){
         for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { // why am i getting a Y flux of vx? 
             for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
-                fluid.fluxesY[i][j] = flux(riemannSolver(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j]),eos[0]);
+                fluid.fluxesY[i][j] = flux(riemannSolver(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j]),eos);
             }
         }
     }
@@ -258,7 +471,6 @@ void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y
         }
         fluid.u = fluid.uPlus1;
         //print_arr(u,RHO);
-        std::cout << "X updated" << std::endl;
     } else if (direction == YDIR){
         for (std::vector<double>::size_type i = nGhost; i < fluid.u.size()-nGhost; ++i){ // this is the part that causes vx to grow
             for (std::vector<double>::size_type j = nGhost-1; j < fluid.u[0].size() - nGhost+1; ++j) {
@@ -267,7 +479,6 @@ void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y
         }
         fluid.u = fluid.uPlus1;
         //print_arr(u,RHO);
-        std::cout << "Y updated" << std::endl;
     }
     
 };
@@ -302,19 +513,19 @@ std::array<double,4> solver::fEuler(std::array<double,4> arr, EOS* eos){ // take
 
 // ------------------------- secondary fluxes --------------------- //
 
-std::array<double,4> solver::LF(std::array<double,4> v1, std::array<double,4> v2)const{
+std::array<double,4> solver::LF(std::array<double,4> v1, std::array<double,4> v2, EOS* eos)const{
     if (direction == XDIR){
-        return 0.5 * (flux(eos[0]->consvToPrim(v1),eos[0]) + flux(eos[0]->consvToPrim(v2),eos[0])) + 0.5 * (dx / dt) * (v1 - v2);
+        return 0.5 * (flux(eos->consvToPrim(v1),eos) + flux(eos->consvToPrim(v2),eos)) + 0.5 * (dx / dt) * (v1 - v2);
     } else {
-        return 0.5 * (flux(eos[0]->consvToPrim(v1),eos[0]) + flux(eos[0]->consvToPrim(v2),eos[0])) + 0.5 * (dy / dt) * (v1 - v2);
+        return 0.5 * (flux(eos->consvToPrim(v1),eos) + flux(eos->consvToPrim(v2),eos)) + 0.5 * (dy / dt) * (v1 - v2);
     }
 };
 
-std::array<double,4> solver::laxFhalf(std::array<double,4> ui, std::array<double,4> uip1)const{
+std::array<double,4> solver::laxFhalf(std::array<double,4> ui, std::array<double,4> uip1, EOS* eos)const{
     if (direction == XDIR){
-        return 0.5*(ui+uip1)-(0.5*(dt/dx)*(flux(eos[0]->consvToPrim(uip1),eos[0])-flux(eos[0]->consvToPrim(ui),eos[0])));
+        return 0.5*(ui+uip1)-(0.5*(dt/dx)*(flux(eos->consvToPrim(uip1),eos)-flux(eos->consvToPrim(ui),eos)));
     } else if (direction == YDIR){
-        return 0.5*(ui+uip1)-(0.5*(dt/dy)*(flux(eos[0]->consvToPrim(uip1),eos[0])-flux(eos[0]->consvToPrim(ui),eos[0])));
+        return 0.5*(ui+uip1)-(0.5*(dt/dy)*(flux(eos->consvToPrim(uip1),eos)-flux(eos->consvToPrim(ui),eos)));
     } else {
         throw std::runtime_error("laxfhalf doesnt know which dimension");
     }
@@ -394,12 +605,12 @@ void solver::calcUBars(fluid& fluid){ // calculates for all u except leftmost ce
 };
 
 
-void solver::updUBars(fluid& fluid){
+void solver::updUBars(fluid& fluid, EOS* eos){
     if (direction == XDIR){
         for (size_t i = 0; i<(fluid.uBarLupdX.size()); ++i){
             for (size_t j = 0; j<(fluid.uBarLupdX[0].size()); ++j){
-                fluid.uBarLupdX[i][j] = fluid.uBarLX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(fluid.uBarRX[i][j]),eos[0])-flux(eos[0]->consvToPrim(fluid.uBarLX[i][j]),eos[0]));
-                fluid.uBarRupdX[i][j] = fluid.uBarRX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(fluid.uBarRX[i][j]),eos[0])-flux(eos[0]->consvToPrim(fluid.uBarLX[i][j]),eos[0]));
+                fluid.uBarLupdX[i][j] = fluid.uBarLX[i][j]-0.5*(dt/dx)*(flux(eos->consvToPrim(fluid.uBarRX[i][j]),eos)-flux(eos->consvToPrim(fluid.uBarLX[i][j]),eos));
+                fluid.uBarRupdX[i][j] = fluid.uBarRX[i][j]-0.5*(dt/dx)*(flux(eos->consvToPrim(fluid.uBarRX[i][j]),eos)-flux(eos->consvToPrim(fluid.uBarLX[i][j]),eos));
             }
         }
         fluid.uBarLX = fluid.uBarLupdX;
@@ -407,8 +618,8 @@ void solver::updUBars(fluid& fluid){
     } else if (direction == YDIR){
         for (size_t i = 0; i<(fluid.uBarLupdY.size()); ++i){
             for (size_t j = 0; j<(fluid.uBarLupdY[0].size()); ++j){
-                fluid.uBarLupdY[i][j] = fluid.uBarLY[i][j]-0.5*(dt/dy)*(flux(eos[0]->consvToPrim(fluid.uBarRY[i][j]),eos[0])-flux(eos[0]->consvToPrim(fluid.uBarLY[i][j]),eos[0]));
-                fluid.uBarRupdY[i][j] = fluid.uBarRY[i][j]-0.5*(dt/dy)*(flux(eos[0]->consvToPrim(fluid.uBarRY[i][j]),eos[0])-flux(eos[0]->consvToPrim(fluid.uBarLY[i][j]),eos[0]));
+                fluid.uBarLupdY[i][j] = fluid.uBarLY[i][j]-0.5*(dt/dy)*(flux(eos->consvToPrim(fluid.uBarRY[i][j]),eos)-flux(eos->consvToPrim(fluid.uBarLY[i][j]),eos));
+                fluid.uBarRupdY[i][j] = fluid.uBarRY[i][j]-0.5*(dt/dy)*(flux(eos->consvToPrim(fluid.uBarRY[i][j]),eos)-flux(eos->consvToPrim(fluid.uBarLY[i][j]),eos));
             }
         }
         fluid.uBarLY = fluid.uBarLupdY;
@@ -505,6 +716,60 @@ void solver::resize2D(int nx, int ny, std::vector< std::vector< double > >& arr)
 
 }
 
+void solver::resize2Db(int nx, int ny, std::vector< std::vector< std::array <double,2> > >& arr){
+    std::cout << "Resizing vector to rows: " << nx << ", cols: " << ny << std::endl;
+
+    arr.resize(ny);
+    for (size_t i = 0; i < arr.size(); ++i){
+        arr[i].resize(nx);
+    }
+
+}
+
+void solver::resize2Dc(int nx, int ny, std::vector< std::vector< std::array <double,4> > >& arr){
+    std::cout << "Resizing vector to rows: " << nx << ", cols: " << ny << std::endl;
+
+    arr.resize(ny);
+    for (size_t i = 0; i < arr.size(); ++i){
+        arr[i].resize(nx);
+    }
+
+}
+
+std::array<double,4> solver::bilinear(double x, double y, fluid& fluid){
+    int rows = nCells;
+    int cols = nCells;
+
+    // Compute indices of surrounding grid points
+    int i = (x - x0) / dx;
+    int j = (y - y0) / dy;
+
+    if (i < 0 || i > rows - 1 || j < 0 || j > cols - 1) {
+        std::cout << i << " " << j << std::endl;
+        //return {NAN,NAN,NAN,NAN};
+        //throw std::runtime_error("interpolation out of bounds");
+    };
+
+    // Physical coordinates of the four surrounding points
+    double xL = x0 + i * dx;
+    double xR = x0 + (i + 1) * dx;
+    double yL = y0 + j * dy;
+    double yR = y0 + (j + 1) * dy;
+
+    // Grid values at the four points
+    std::array<double,4> f00 = fluid.u[i][j];
+    std::array<double,4> f10 = fluid.u[i + 1][j];
+    std::array<double,4> f01 = fluid.u[i][j + 1];
+    std::array<double,4> f11 = fluid.u[i + 1][j + 1];
+
+    // Interpolation along x at y0 and y1
+    std::array<double,4> f_x_y0 = (xR - x) / (xR - xL) * f00 + (x - xL) / (xR - xL) * f10;
+    std::array<double,4> f_x_y1 = (xR - x) / (xR - xL) * f01 + (x - xL) / (xR - xL) * f11;
+
+    // Interpolation along y
+    return (yR - y) / (yR - yL) * f_x_y0 + (y - yL) / (yR - yL) * f_x_y1;
+}
+
 
 // ---------------------- Time Stepping ---------------------- //
 
@@ -513,7 +778,6 @@ void solver::setDt(){
     std::cout << "setting dt" << std::endl;
     for (std::vector<double>::size_type i = 0; i < fluid1.u.size(); ++i) {
         for (std::vector<double>::size_type j = 0; j < fluid1.u.size(); ++j) {
-            //aMax = std::max(aMax, std::fabs(std::sqrt((eos[0]->consvToPrim(fluid1.u[i][j])[UX])*(eos[0]->consvToPrim(fluid1.u[i][j])[UX])+(eos[0]->consvToPrim(fluid1.u[i][j])[UY])*(eos[0]->consvToPrim(fluid1.u[i][j])[UY])))+eos[0]->calcSoundSpeed(eos[0]->consvToPrim(fluid1.u[i][j])));
             aMax = std::max(aMax, std::max(std::sqrt(pow(eos[1]->consvToPrim(fluid2.u[i][j])[UX],2)+pow(eos[1]->consvToPrim(fluid2.u[i][j])[UY],2))+eos[1]->calcSoundSpeed(eos[1]->consvToPrim(fluid2.u[i][j])), std::sqrt(pow(eos[0]->consvToPrim(fluid1.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(fluid1.u[i][j])[UY],2))+eos[0]->calcSoundSpeed(eos[0]->consvToPrim(fluid1.u[i][j]))));
 
         }
@@ -525,22 +789,22 @@ void solver::setDt(){
 
 
     double writeTime = writeInterval*(std::floor((time+1e-9) / writeInterval)+1); //returing 0.29?
-    std::cout << "writeTime = " << writeTime << std::endl;
+    //std::cout << "writeTime = " << writeTime << std::endl;
 
     if (endTime - time <= dt && writeTime-time >= dt){
-        std::cout << "option 0 " << std::endl;
+        //std::cout << "option 0 " << std::endl;
         dt = endTime - time;
         assert(dt != 0);
         time = endTime;
         std::cout << "last step:" << dt << std::endl;
     } else if (writeTime-time <= dt && writeTime-time > 0){ // manually reducing dt to hit the write times
-        std::cout << "option 1 " << std::endl;
+        //std::cout << "option 1 " << std::endl;
 
         dt = writeTime - time;
         assert(dt != 0);
         time = writeTime;
     } else {
-        std::cout << "option 2 " << std::endl;
+        //std::cout << "option 2 " << std::endl;
         time = time + dt;
     }
 

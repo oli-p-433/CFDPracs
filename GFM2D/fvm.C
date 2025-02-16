@@ -97,7 +97,7 @@ int main(){
             
             
             
-            if (x+y<1){
+            if (x<0.5){
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
             } else {

@@ -20,16 +20,41 @@ class solver{
         void init(std::vector< std::vector< std::array<double,4> > >, fluid& fluid);\
         void phiInit(std::vector< std::vector < double > >);
 
+        // GFM
+        std::vector< std::array< int,2 > > interfaceCells;
+        void findBoundary();
+        std::vector < std::array<double,2> > interfaceNormals;
+        void calcPhiGrads();
+        std::vector < std::array < std::array<double,2>,2 > > interfacePositions;
+        void calcInterface();
+        std::vector <  std::array< std::array<double,4>,2 > > interfaceStates;
+        void interpInterfaceStates();
+        std::array<double,4> bilinear(double,double,fluid&);
+        void interfaceRiem();
+        std::vector < std::array<double,4> > riemInterfaceStates;
+        void resolveVelocities();
+        std::vector < std::array < std::array<double,2>,2> > resolvedVelocities;
+        void calcStarStates();
+        std::vector < std::array < std::array<double,4>,2> > starStates;
+        void calcPhiNormals();
+        std::vector < std::vector < std::array<double,2 > > > phiNormals;
+        void calcnDotPhiNormals(fluid&);
+        std::vector < std::vector < std::array < double,4 > > > uExtrap;
+        std::vector < std::vector < std::array < double,4 > > > nDotGradPhi;
+        void setInterface();
+        void setGhostFluids();
+
+
         void setDt();
         void laxFriedrichs();
         std::array<double,4> fBurgersLF(std::array<double,4>)const;
         std::array<double,4> finvectLF(std::array<double,4>)const;
         std::array<double,4> fEuler(std::array<double,4>,EOS*);
 
-        void SLIC(fluid&);
-        void MUSCL(fluid&);
-        std::array<double,4> laxFhalf(const std::array<double,4>, const std::array<double,4>)const;
-        std::array<double,4> LF(const std::array<double,4>, const std::array<double,4>)const;
+        void SLIC(fluid&, EOS*);
+        void MUSCL(fluid&, EOS*);
+        std::array<double,4> laxFhalf(const std::array<double,4>, const std::array<double,4>, EOS*)const;
+        std::array<double,4> LF(const std::array<double,4>, const std::array<double,4>, EOS*)const;
         void pointsUpdate(fluid&);
         void phiUpdate();
         void run();
@@ -42,7 +67,7 @@ class solver{
         void calcr(fluid&);
         std::array<double,4> static calcSlope(double omega, std::array<double,4> slopeleft, std::array<double,4> sloperight);
         void calcUBars(fluid&);
-        void updUBars(fluid&);
+        void updUBars(fluid&, EOS*);
         std::function<std::array<double,4>(std::array<double,4>)> slopeLim;
         
         std::array<double,4> minbee(std::array<double,4>);
@@ -84,6 +109,8 @@ class solver{
         static void print_state(std::array<double,4>);
         static std::array<double,4> set_vals(double,double,double,double);
         static void resize2D(int,int,std::vector < std::vector < double >>&);
+        static void resize2Db(int,int,std::vector < std::vector < std::array<double,2> >>&);
+        static void resize2Dc(int,int,std::vector < std::vector < std::array<double,4> >>&);
 
         // Source term modelling
 
@@ -111,6 +138,7 @@ class solver{
         // level set
         std::vector< std::vector < double > > phi;
         std::vector< std::vector < double > > phiPlus1;
+
 
 
         double x0;
