@@ -38,11 +38,13 @@ class solver{
         std::vector < std::array < std::array<double,4>,2> > starStates;
         void calcPhiNormals();
         std::vector < std::vector < std::array<double,2 > > > phiNormals;
-        void calcnDotPhiNormals(fluid&);
+        void calcnDotPhiNormals();
         std::vector < std::vector < std::array < double,4 > > > uExtrap;
         std::vector < std::vector < std::array < double,4 > > > nDotGradPhi;
         void setInterface();
         void setGhostFluids();
+        void eikonalDt();
+        double extrapDt;
 
 
         void setDt();

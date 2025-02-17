@@ -122,6 +122,7 @@ int main(){
                 double y = y0 + (j-sim.ghosts() + 0.5) * sim.get_dy();
                 initFile << x << " " << y << " " << sim.eos[0]->consvToPrim(uInit1[i][j])[var] << " " << sim.eos[1]->consvToPrim(uInit2[i][j])[var] << " " << phiInit[i][j] << std::endl;
             }
+            initFile << "\n";
         }
         initFile.close();
     }

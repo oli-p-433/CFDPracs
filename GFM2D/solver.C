@@ -6,6 +6,9 @@
 #include <fstream>
 #include <filesystem>
 
+#include <thread>
+#include <chrono>
+
 
 void solver::run(){
     std::cout << "pre-bc" << std::endl;
@@ -13,8 +16,6 @@ void solver::run(){
     transmissiveBC(fluid1);
     transmissiveBC(fluid2);
     phiBC();
-
-    writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
 
     int splitFlip = 0;
@@ -35,12 +36,18 @@ void solver::run(){
         //std::cout << "star states calculated" << std::endl;
         this->setInterface();
 
-        time = 0.01;
-        writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
         std::cout << "setting ghost fluids" << std::endl;   
         this->setGhostFluids();
         std::cout << "uExtrap evolved" << std::endl;
+
+        
+        writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
+
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+
+        
 
 
         this->setDt();
@@ -245,7 +252,6 @@ void solver::setInterface(){ // ind = 0 for fluid1, 1 for fluid2
     // setting uExtrap to the ghost fluids
     std::cout << "no of star states = " << starStates.size() << std::endl;
     for (size_t i = 0; i<starStates.size(); ++i){
-        print_state(eos[1]->primToConsv(starStates[i][1]));
         fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]] = eos[1]->primToConsv(starStates[i][1]); // interface states set to u*L
         if (phi[interfaceCells[i][0]+1][interfaceCells[i][1]] > 0){ // surrounding states set to u*R
             fluid1.u[interfaceCells[i][0]+1][interfaceCells[i][1]] = eos[0]->primToConsv(starStates[i][0]);
@@ -277,35 +283,64 @@ void solver::setInterface(){ // ind = 0 for fluid1, 1 for fluid2
     */
 }
 
-void solver::calcnDotPhiNormals(fluid& fluid){
+void solver::calcnDotPhiNormals(){
     resize2Dc(nCells+2*nGhost,nCells+2*nGhost,nDotGradPhi);
     for (size_t i = nGhost; i < nCells+nGhost; ++i){
         for (size_t j = nGhost; j < nCells+nGhost; ++j){
             std::array<double,4> xCom, yCom;
             for (int var = 0; var < 4; ++var){
-                xCom[var] = (phiNormals[i][j][0] > 0) ? phiNormals[i][j][0]*(fluid.u[i][j][var]-fluid.u[i][j-1][var])/dx : phiNormals[i][j][0]*(fluid.u[i][j+1][var]-fluid.u[i][j][var])/dx;
-                yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid.u[i][j][var]-fluid.u[i-1][j][var])/dy : phiNormals[i][j][1]*(fluid.u[i+1][j][var]-fluid.u[i][j][var])/dy;
-                fluid.nDotGradPhi[i][j] = xCom + yCom;
+                xCom[var] = (phiNormals[i][j][0] > 0) ? phiNormals[i][j][0]*(fluid1.u[i][j][var]-fluid1.u[i][j-1][var])/dx : phiNormals[i][j][0]*(fluid1.u[i][j+1][var]-fluid1.u[i][j][var])/dx;
+                yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid1.u[i][j][var]-fluid1.u[i-1][j][var])/dy : phiNormals[i][j][1]*(fluid1.u[i+1][j][var]-fluid1.u[i][j][var])/dy;
+                fluid1.nDotGradPhi[i][j] = xCom + yCom;
             }
         }
     }
+    std::cout << "ndotgradphi = " << fluid1.nDotGradPhi[10][12][0] << std::endl;
+
+    for (size_t i = nGhost; i < nCells+nGhost; ++i){
+        for (size_t j = nGhost; j < nCells+nGhost; ++j){
+            std::array<double,4> xCom, yCom;
+            for (int var = 0; var < 4; ++var){
+                xCom[var] = (phiNormals[i][j][0] > 0) ? phiNormals[i][j][0]*(fluid2.u[i][j+1][var]-fluid2.u[i][j][var])/dx : phiNormals[i][j][0]*(fluid2.u[i][j][var]-fluid2.u[i][j-1][var])/dx;
+                yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid2.u[i+1][j][var]-fluid2.u[i][j][var])/dy : phiNormals[i][j][1]*(fluid2.u[i][j][var]-fluid2.u[i-1][j][var])/dy;
+                std::cout << fluid2.u[i][j+1][var] << " " << fluid2.u[i][j][var] << " " << fluid2.u[i][j-1][var] << std::endl;
+                std::cout << xCom[0] << " " << yCom[0] << std::endl;
+                fluid2.nDotGradPhi[i][j] = xCom + yCom;
+                std::cout << "ndotgradphi (2) = " << fluid2.nDotGradPhi[i][j][0] << std::endl;
+
+            }
+        }
+    }
+
+}
+
+void solver::eikonalDt(){
+    double aMax = 1e-15;
+    for (size_t i = 0; i < phiNormals.size(); ++i) {
+        for (size_t j = 0; j < phiNormals[0].size(); ++j) {
+            aMax = std::max(aMax, std::sqrt(phiNormals[i][j][0]*phiNormals[i][j][0]/(dx*dx) + phiNormals[i][j][1]*phiNormals[i][j][1]/(dy*dy)));
+        }
+    }
+    extrapDt = 0.5/aMax;
+    std::cout << "extrapDt = " << extrapDt << std::endl;
+}
+
+int sign(double value) {
+    return (value >= 0) ? 1 : -1;
 }
 
 void solver::setGhostFluids(){
-    /*
-    WRONG - currently have extrapolation going the wrong direction
-    (into the real fluid rather than ghost fluid)
-    Need work directly with the ghost fluids
-    */
+    
     calcPhiNormals();
     for (int iter = 0; iter < 21; ++iter){
         setInterface();
-        calcnDotPhiNormals(fluid1);
-        calcnDotPhiNormals(fluid2);
+        calcnDotPhiNormals();
+        eikonalDt();
+
         for (size_t i = nGhost; i < nCells+nGhost; ++i){
             for (size_t j = nGhost; j < nCells+nGhost; ++j){
-                fluid1.u[i][j] = fluid1.u[i][j] - (phi[i][j]>0)*fluid1.nDotGradPhi[i][j];
-                fluid2.u[i][j] = fluid2.u[i][j] - (phi[i][j]<=0)*fluid2.nDotGradPhi[i][j];
+                fluid1.u[i][j] = fluid1.u[i][j] - sign(phi[i][j])*extrapDt*(phi[i][j]>0)*fluid1.nDotGradPhi[i][j];
+                fluid2.u[i][j] = fluid2.u[i][j] - sign(phi[i][j])*extrapDt*(phi[i][j]<=0)*fluid2.nDotGradPhi[i][j];
             }
         }
     }
