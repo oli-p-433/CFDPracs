@@ -12,6 +12,10 @@ void solver::run(){
 
     transmissiveBC(fluid1);
     transmissiveBC(fluid2);
+    phiBC();
+
+    writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
+
 
     int splitFlip = 0;
     do{
@@ -29,9 +33,14 @@ void solver::run(){
         //std::cout << "resolved velocities" << std::endl;
         this->calcStarStates();
         //std::cout << "star states calculated" << std::endl;
+        this->setInterface();
+
+        time = 0.01;
+        writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
+
+        std::cout << "setting ghost fluids" << std::endl;   
         this->setGhostFluids();
         std::cout << "uExtrap evolved" << std::endl;
-        writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
 
         this->setDt();
@@ -91,8 +100,8 @@ void solver::run(){
 };
 
 void solver::findBoundary(){ // checks for change in sign of level set. emplaces indices of cell with phi <= 0.
-    for (size_t i = nGhost; i < phi.size()-nGhost-1; ++i) {  // Loop through all cells (except last)
-        for (size_t j = nGhost; j < phi.size()-nGhost-1; ++j){
+    for (size_t i = nGhost; i < phi.size()-nGhost; ++i) {  // Loop through all cells (except last)
+        for (size_t j = nGhost; j < phi.size()-nGhost; ++j){
             if (phi[i][j] * phi[i+1][j] < 0 || phi[i][j] * phi[i][j+1] < 0) {  // Sign change detected
                 //std::cout << phi[i] << " " << phi[i+1] << std::endl;
                 if (phi[i][j] <= 0){
@@ -127,6 +136,8 @@ void solver::findBoundary(){ // checks for change in sign of level set. emplaces
     riemInterfaceStates.resize(interfaceCells.size());
     starStates.resize(interfaceCells.size());
     resize2Dc(nCells+2*nGhost,nCells+2*nGhost,uExtrap);
+
+
     
 }
 
@@ -143,13 +154,16 @@ void solver::calcPhiGrads(){
 
 void solver::calcInterface(){
     for (size_t i = 0; i < interfaceCells.size(); ++i){
-        double x_i = x0 + interfaceCells[i][1]*dx;
-        double y_i = y0 + interfaceCells[i][0]*dx;
+        double x_i = x0 + (interfaceCells[i][1]-1.5)*dx; // -2 for ghost cells, +0.5 for cell centre
+        double y_i = y0 + (interfaceCells[i][0]-1.5)*dx;
+
         double x = x_i - phi[interfaceCells[i][0]][interfaceCells[i][1]]*interfaceNormals[i][0];
         double y = y_i - phi[interfaceCells[i][0]][interfaceCells[i][1]]*interfaceNormals[i][1];
-        std::array<double,2> lPos = {x+1.5*dx*interfaceNormals[i][0],y+1.5*dy*interfaceNormals[i][1]};
-        std::array<double,2> rPos = {x-1.5*dx*interfaceNormals[i][0],y-1.5*dy*interfaceNormals[i][1]};
+
+        std::array<double,2> lPos = {x-1.5*dx*interfaceNormals[i][0],y-1.5*dy*interfaceNormals[i][1]};
+        std::array<double,2> rPos = {x+1.5*dx*interfaceNormals[i][0],y+1.5*dy*interfaceNormals[i][1]};
         interfacePositions[i] = {lPos,rPos};
+        //std::cout << "interface positions: " << lPos[0] << " " << lPos[1] << " " << rPos[0] << " " << rPos[1] << std::endl;
     }
 }
 
@@ -159,6 +173,7 @@ void solver::interpInterfaceStates(){
         std::array<double,4> rState = bilinear(interfacePositions[i][1][0],interfacePositions[i][1][1],fluid2);
         
         interfaceStates[i] = {lState,rState};
+
     }
 }
 
@@ -179,8 +194,7 @@ void solver::interfaceRiem(){
     for (size_t i=0; i<interfaceStates.size(); ++i){
         std::array<double,4> lState = {interfaceStates[i][0][0],resolvedVelocities[i][0][0],resolvedVelocities[i][0][1],interfaceStates[i][0][3]};  
         std::array<double,4> rState = {interfaceStates[i][1][0],resolvedVelocities[i][1][0],resolvedVelocities[i][1][1],interfaceStates[i][1][3]};
-        //print_state(lState);
-        //print_state(rState);
+
 
         riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),eos[0]->consvToPrim(lState),eos[1]->consvToPrim(rState),1,1,0.5,0.12,100,0,0); // need p_inf setup
         std::array<double,4> result = solution.exctRiemann();
@@ -208,6 +222,9 @@ void solver::calcStarStates(){
         std::array<double,4> uStarR = {riemInterfaceStates[i][0],uRStarx,uRStary,riemInterfaceStates[i][3]};
         std::array<std::array<double,4>,2> res = {uStarL,uStarR};
         starStates[i] = res;
+        //std::cout << "star states left: " << uStarL[0] << " " << uStarL[1] << " " << uStarL[2] << " " << uStarL[3] << std::endl;
+        //std::cout << "star states right: " << uStarR[0] << " " << uStarR[1] << " " << uStarR[2] << " " << uStarR[3] << std::endl;
+
     }
 }
 
@@ -223,22 +240,41 @@ void solver::calcPhiNormals(){
     }
 }
 
-void solver::setInterface(){
-    
-    // setting uExtrap to the ghost fluids
+void solver::setInterface(){ // ind = 0 for fluid1, 1 for fluid2
 
+    // setting uExtrap to the ghost fluids
+    std::cout << "no of star states = " << starStates.size() << std::endl;
     for (size_t i = 0; i<starStates.size(); ++i){
-        fluid1.u[interfaceCells[i][0]][interfaceCells[i][1]] = starStates[i][0]; // interface states set to u*L
+        print_state(eos[1]->primToConsv(starStates[i][1]));
+        fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]] = eos[1]->primToConsv(starStates[i][1]); // interface states set to u*L
         if (phi[interfaceCells[i][0]+1][interfaceCells[i][1]] > 0){ // surrounding states set to u*R
-            fluid2.u[interfaceCells[i][0]+1][interfaceCells[i][1]] = starStates[i][1];
+            fluid1.u[interfaceCells[i][0]+1][interfaceCells[i][1]] = eos[0]->primToConsv(starStates[i][0]);
         } else if (phi[interfaceCells[i][0]][interfaceCells[i][1]+1] > 0){
-            fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]+1] = starStates[i][1];
+            fluid1.u[interfaceCells[i][0]][interfaceCells[i][1]+1] = eos[0]->primToConsv(starStates[i][0]);
         } else if (phi[interfaceCells[i][0]-1][interfaceCells[i][1]] > 0){
-            fluid2.u[interfaceCells[i][0]-1][interfaceCells[i][1]] = starStates[i][1];
+            fluid1.u[interfaceCells[i][0]-1][interfaceCells[i][1]] = eos[0]->primToConsv(starStates[i][0]);
         } else if (phi[interfaceCells[i][0]][interfaceCells[i][1]-1] > 0){
-            fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]-1] = starStates[i][1];
+            fluid1.u[interfaceCells[i][0]][interfaceCells[i][1]-1] = eos[0]->primToConsv(starStates[i][0]);
+        } else {
+            std::cout << "no surrounding states found for interface cell " << interfaceCells[i][0] << " " << interfaceCells[i][1] << std::endl;
         }
     }
+    /*
+    for (size_t i = 0; i<starStates.size(); ++i){
+        //fluid1.u[interfaceCells[i][0]][interfaceCells[i][1]] = eos[0]->primToConsv(starStates[i][0]); // interface states set to u*L
+        if (phi[interfaceCells[i][0]+1][interfaceCells[i][1]] <= 0){ // surrounding states set to u*R
+            fluid2.u[interfaceCells[i][0]+1][interfaceCells[i][1]] = eos[1]->primToConsv(starStates[i][1]);
+        } else if (phi[interfaceCells[i][0]][interfaceCells[i][1]+1] <= 0){
+            fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]+1] = eos[1]->primToConsv(starStates[i][1]);
+        } else if (phi[interfaceCells[i][0]-1][interfaceCells[i][1]] <= 0){
+            fluid2.u[interfaceCells[i][0]-1][interfaceCells[i][1]] = eos[1]->primToConsv(starStates[i][1]);
+        } else if (phi[interfaceCells[i][0]][interfaceCells[i][1]-1] <= 0){
+            fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]-1] = eos[1]->primToConsv(starStates[i][1]);
+        } else {
+            std::cout << "no surrounding states found for interface cell " << interfaceCells[i][0] << " " << interfaceCells[i][1] << std::endl;
+        }
+    }
+    */
 }
 
 void solver::calcnDotPhiNormals(fluid& fluid){
@@ -707,7 +743,6 @@ void solver::print_state(std::array<double,4> v){ // just prints a slice (0 by d
 }
 
 void solver::resize2D(int nx, int ny, std::vector< std::vector< double > >& arr){
-    std::cout << "Resizing vector to rows: " << nx << ", cols: " << ny << std::endl;
 
     arr.resize(ny);
     for (size_t i = 0; i < arr.size(); ++i){
@@ -717,7 +752,6 @@ void solver::resize2D(int nx, int ny, std::vector< std::vector< double > >& arr)
 }
 
 void solver::resize2Db(int nx, int ny, std::vector< std::vector< std::array <double,2> > >& arr){
-    std::cout << "Resizing vector to rows: " << nx << ", cols: " << ny << std::endl;
 
     arr.resize(ny);
     for (size_t i = 0; i < arr.size(); ++i){
@@ -727,7 +761,6 @@ void solver::resize2Db(int nx, int ny, std::vector< std::vector< std::array <dou
 }
 
 void solver::resize2Dc(int nx, int ny, std::vector< std::vector< std::array <double,4> > >& arr){
-    std::cout << "Resizing vector to rows: " << nx << ", cols: " << ny << std::endl;
 
     arr.resize(ny);
     for (size_t i = 0; i < arr.size(); ++i){
@@ -741,8 +774,10 @@ std::array<double,4> solver::bilinear(double x, double y, fluid& fluid){
     int cols = nCells;
 
     // Compute indices of surrounding grid points
-    int i = (x - x0) / dx;
-    int j = (y - y0) / dy;
+    int j = ((x - x0) / dx) + nGhost - 0.5;
+    int i = ((y - y0) / dy) + nGhost - 0.5;
+
+    //std::cout << "i = " << i << " j = " << j << std::endl;
 
     if (i < 0 || i > rows - 1 || j < 0 || j > cols - 1) {
         std::cout << i << " " << j << std::endl;
@@ -751,10 +786,10 @@ std::array<double,4> solver::bilinear(double x, double y, fluid& fluid){
     };
 
     // Physical coordinates of the four surrounding points
-    double xL = x0 + i * dx;
-    double xR = x0 + (i + 1) * dx;
-    double yL = y0 + j * dy;
-    double yR = y0 + (j + 1) * dy;
+    double xL = x0 + (i - nGhost + 0.5) * dx;
+    double xR = x0 + (i + 1 - nGhost + 0.5) * dx;
+    double yL = y0 + (j - nGhost + 0.5) * dy;
+    double yR = y0 + (j + 1 - nGhost + 0.5) * dy;
 
     // Grid values at the four points
     std::array<double,4> f00 = fluid.u[i][j];

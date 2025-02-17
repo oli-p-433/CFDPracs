@@ -14,7 +14,7 @@
 
 
 int main(){
-    int nCells = 64;
+    int nCells = 20;
     int nGhost = 2;
     double x0{0}, x1{1};
     double y0{0}, y1{1};
