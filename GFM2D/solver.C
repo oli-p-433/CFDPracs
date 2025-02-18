@@ -20,6 +20,7 @@ void solver::run(){
 
     int splitFlip = 0;
     do{
+        
         this->findBoundary();
         //std::cout << "boundary found" << std::endl;
         this->calcPhiGrads();
@@ -34,7 +35,6 @@ void solver::run(){
         //std::cout << "resolved velocities" << std::endl;
         this->calcStarStates();
         //std::cout << "star states calculated" << std::endl;
-        this->setInterface();
 
 
         std::cout << "setting ghost fluids" << std::endl;   
@@ -42,10 +42,9 @@ void solver::run(){
         std::cout << "uExtrap evolved" << std::endl;
 
         
-        writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
-
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
+        //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
+        //std::this_thread::sleep_for(std::chrono::seconds(5));
+        
 
         
 
@@ -61,6 +60,7 @@ void solver::run(){
         std::cout << "updating phi" << std::endl;
 
         phiUpdate();
+        fixFreshlyCleared();
 
         splitFlip++;
         if (splitFlip%2 == 0){
@@ -92,7 +92,9 @@ void solver::run(){
         transmissiveBC(fluid2);
 
         this->interfaceCells={};
-        this->interfaceStates={};
+        this->freshlyCleared={};
+        //this->interfaceStates={};
+
 
         //this->sourceUpdate();
 
@@ -295,7 +297,7 @@ void solver::calcnDotPhiNormals(){
             }
         }
     }
-    std::cout << "ndotgradphi = " << fluid1.nDotGradPhi[10][12][0] << std::endl;
+    //std::cout << "ndotgradphi = " << fluid1.nDotGradPhi[10][12][0] << std::endl;
 
     for (size_t i = nGhost; i < nCells+nGhost; ++i){
         for (size_t j = nGhost; j < nCells+nGhost; ++j){
@@ -303,10 +305,10 @@ void solver::calcnDotPhiNormals(){
             for (int var = 0; var < 4; ++var){
                 xCom[var] = (phiNormals[i][j][0] > 0) ? phiNormals[i][j][0]*(fluid2.u[i][j+1][var]-fluid2.u[i][j][var])/dx : phiNormals[i][j][0]*(fluid2.u[i][j][var]-fluid2.u[i][j-1][var])/dx;
                 yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid2.u[i+1][j][var]-fluid2.u[i][j][var])/dy : phiNormals[i][j][1]*(fluid2.u[i][j][var]-fluid2.u[i-1][j][var])/dy;
-                std::cout << fluid2.u[i][j+1][var] << " " << fluid2.u[i][j][var] << " " << fluid2.u[i][j-1][var] << std::endl;
-                std::cout << xCom[0] << " " << yCom[0] << std::endl;
+                //std::cout << fluid2.u[i][j+1][var] << " " << fluid2.u[i][j][var] << " " << fluid2.u[i][j-1][var] << std::endl;
+                //std::cout << xCom[0] << " " << yCom[0] << std::endl;
                 fluid2.nDotGradPhi[i][j] = xCom + yCom;
-                std::cout << "ndotgradphi (2) = " << fluid2.nDotGradPhi[i][j][0] << std::endl;
+                //std::cout << "ndotgradphi (2) = " << fluid2.nDotGradPhi[i][j][0] << std::endl;
 
             }
         }
@@ -344,13 +346,9 @@ void solver::setGhostFluids(){
             }
         }
     }
+    setInterface();
 
 }
-
-
-
-
-
 
 
 void solver::SLIC(fluid& fluid, EOS* eos){
@@ -493,6 +491,8 @@ void solver::phiUpdate(){
 
     double uVal;
 
+    phiOld = phi;
+
     for (std::vector<double>::size_type i = nGhost-1; i < phi.size()-nGhost+1; ++i){
         for (std::vector<double>::size_type j = nGhost; j < phi[0].size() - nGhost; ++j) {
             if (phi[i][j] >= 0){
@@ -508,6 +508,7 @@ void solver::phiUpdate(){
             }
         }
     }
+
     phi = phiPlus1;
     //print_arr(u,RHO);
     //std::cout << "phiX updated" << std::endl;
@@ -526,9 +527,59 @@ void solver::phiUpdate(){
             }
         }
     }
+
     phi = phiPlus1;
-    //print_arr(u,RHO);
-    //std::cout << "Y updated" << std::endl;
+
+    // identify freshly cleared cells
+    for (int i = 0; i<phiOld.size(); ++i){
+        for (int j = 0; j < phiOld[0].size(); ++j){
+            if (phi[i][j]*phiOld[i][j] < 0){
+                std::array<int,2> coord = {i,j};
+                freshlyCleared.push_back(coord);
+            }
+        }
+    }
+}
+
+void solver::neighbourAvg(fluid& f, int i, int j){
+
+        std::array<double, 4> sum = {0.0, 0.0, 0.0, 0.0};
+        int count = 0;
+
+        // Get the sign of phi at (i, j)
+        bool sign = phi[i][j] >= 0.0;
+
+        // Offsets for the four neighbors
+        int offsets[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
+        // Check each neighbor
+        for (int k = 0; k < 4; ++k) {
+            int ni = i + offsets[k][0];
+            int nj = j + offsets[k][1];
+
+            // Boundary check
+            if (ni >= 0 && ni < phi.size() && nj >= 0 && nj < phi[0].size()) {
+                // Check if the sign of phi is the same
+                if ((phi[ni][nj] >= 0.0) == sign) {
+                    sum = sum + f.u[ni][nj];  // Sum the four-vectors
+                    ++count;
+                }
+            }
+        }
+
+        // Average and assign if there are valid neighbors
+        if (count > 0) {
+            f.u[i][j] = sum / count;  // Average the four-vectors
+        } else {
+            throw std::runtime_error("freshly cleared cell has no valid neighbours");
+        }
+}
+
+void solver::fixFreshlyCleared(){
+    for (std::array<int,2> cell : freshlyCleared){
+        neighbourAvg(fluid1,cell[0],cell[1]);
+        neighbourAvg(fluid2,cell[0],cell[1]);
+    }
 }
 
 void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y 

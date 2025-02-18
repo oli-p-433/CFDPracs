@@ -47,6 +47,7 @@ class solver{
         double extrapDt;
 
 
+
         void setDt();
         void laxFriedrichs();
         std::array<double,4> fBurgersLF(std::array<double,4>)const;
@@ -59,6 +60,10 @@ class solver{
         std::array<double,4> LF(const std::array<double,4>, const std::array<double,4>, EOS*)const;
         void pointsUpdate(fluid&);
         void phiUpdate();
+        void neighbourAvg(fluid& f, int, int);
+        void fixFreshlyCleared();
+
+
         void run();
         double calcSoundSpeed(std::array<double,4>);
 
@@ -140,6 +145,8 @@ class solver{
         // level set
         std::vector< std::vector < double > > phi;
         std::vector< std::vector < double > > phiPlus1;
+        std::vector< std::vector < double > > phiOld;
+        std::vector<std::array<int, 2>> freshlyCleared;
 
 
 
