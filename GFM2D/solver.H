@@ -111,6 +111,7 @@ class solver{
 
         // utility functions
 
+        static void printPrec(double,int);
         static void print_arr(std::vector < std::vector< std::array<double,4> > >, int);
         static void print_vect(std::vector < std::array<double,4> >);
         static void print_state(std::array<double,4>);
@@ -118,6 +119,7 @@ class solver{
         static void resize2D(int,int,std::vector < std::vector < double >>&);
         static void resize2Db(int,int,std::vector < std::vector < std::array<double,2> >>&);
         static void resize2Dc(int,int,std::vector < std::vector < std::array<double,4> >>&);
+        static void printScalarField(const std::vector < std::vector < double > >&);
 
         // Source term modelling
 

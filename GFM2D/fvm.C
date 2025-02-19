@@ -14,11 +14,11 @@
 
 
 int main(){
-    int nCells = 20;
+    int nCells = 500;
     int nGhost = 2;
-    double x0{0}, x1{1};
-    double y0{0}, y1{1};
-    double startTime = 0.0, endTime = 0.25;
+    double x0{0}, x1{2};
+    double y0{0}, y1{2};
+    double startTime = 0.0, endTime = 0.10;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
@@ -45,7 +45,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.01);
+    sim.setWriteInterval(0.1);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,4> input, EOS* eos){
@@ -53,7 +53,7 @@ int main(){
     }; // because fEuler isnt static
 
     sim.slopeLim = [&sim](std::array<double,4> input){
-        return sim.minbee(input);
+        return sim.vanLeer(input);
     }; // because fEuler isnt static
 
     std::vector< std::vector<std::array<double,4>>> uInit1, uInit2;
@@ -63,11 +63,17 @@ int main(){
     solver::resize2D(nCells+2*nGhost,nCells+2*nGhost,phiInit); 
 
     std::cout << "n ghost cells=" << sim.ghosts() << std::endl;
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit1.size()-sim.ghosts();i++){
-        double y = y0 + (i-sim.ghosts()+0.5)*sim.get_dy();
-        for (std::vector<double>::size_type j=sim.ghosts(); j<uInit1.size()-sim.ghosts();j++){
-            double x = x0 + (j-sim.ghosts()+0.5)*sim.get_dx();
-            phiInit[i][j] = x - 0.5;
+    for (size_t i=0; i<uInit1.size();i++){
+        double y = y0 + (i-static_cast<double>(sim.ghosts())+0.5)*sim.get_dy();
+        for (size_t j=0; j<uInit1[0].size();j++){
+            double x = x0 + (j-static_cast<double>(sim.ghosts())+0.5)*sim.get_dx();
+            //phiInit[i][j] = x - 0.5;
+            //phiInit[i][j] = (y + x - 1)/sqrt(2);
+
+            // sod test
+            phiInit[i][j] = -(sqrt((x-1)*(x-1)+(y-1)*(y-1))-0.2);
+
+            //std::cout << i << " " << j << std::endl;
             
             /*
             if (x > 0.5 && y > 0.5){ 
@@ -97,7 +103,7 @@ int main(){
             
             
             
-            if (x<0.5){
+            if ((x-1)*(x-1)+(y-1)*(y-1) < 0.2*0.2){
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
             } else {
@@ -108,8 +114,8 @@ int main(){
         }
 
     }
-    std::cout << "Printing uInit" << std::endl;
-    //sim.print_arr(uInit,0);
+    //std::cout << "Printing uInit" << std::endl;
+    //sim.print_arr(uInit1,0);
 
     //throw std::runtime_error("have a look");
 

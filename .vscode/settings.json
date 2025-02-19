@@ -73,6 +73,7 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp",
-        "solver1D.C": "cpp"
+        "solver1D.C": "cpp",
+        "filesystem": "cpp"
     }
 }
