@@ -14,17 +14,17 @@
 
 
 int main(){
-    int nCells = 20;
+    int nCells = 400;
     int nGhost = 2;
     double x0{0}, x1{1};
     double y0{0}, y1{1};
-    double startTime = 0.0, endTime = 0.05;
+    double startTime = 0.0, endTime = 0.3;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
 
     // constructing EOS objects
-    idealGas idgas1(1.4); idealGas idgas2(1.4);
+    idealGas idgas1(1.4); idealGas idgas2(1.67);
     std::array<EOS*,2> materials = {&idgas1,&idgas2};
 
     solver sim(x0,x1,y0,y1,startTime,endTime,nCells,nGhost,cour,1.4);
@@ -45,7 +45,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.01);
+    sim.setWriteInterval(0.05);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,4> input, EOS* eos){
@@ -57,7 +57,7 @@ int main(){
     }; // because fEuler isnt static
 
     sim.fluxMethod = [&sim](fluid& f, EOS* e) {
-        sim.godunov(f, e); // Change this to sim.SLIC or sim.godunov as needed
+        sim.MUSCL(f, e); // Change this to sim.SLIC or sim.godunov as needed
     };
 
     std::vector< std::vector<std::array<double,4>>> uInit1, uInit2;
@@ -73,28 +73,45 @@ int main(){
             double x = x0 + (j-static_cast<double>(sim.ghosts())+0.5)*sim.get_dx();
             
             // RIEMANN PROBLEMS //
-
+            /*
             //phiInit[i][j] = (y + x - 1)/sqrt(2);
-            phiInit[i][j] = x - 0.5;
+            phiInit[i][j] = y - 0.5;
                         
-            if (x<0.5){ 
-                uInit1[i][j] = sim.set_vals(1,-2.0,0,0.4);
-                uInit2[i][j] = sim.set_vals(1,-2.0,0,0.4);
+            if (x+y<1){ 
+                uInit1[i][j] = sim.set_vals(1,0.0,0,1);
+                uInit2[i][j] = sim.set_vals(1,0.0,0,1);
             } else {
-                uInit1[i][j] = sim.set_vals(1,2.0,0,0.4);
-                uInit2[i][j] = sim.set_vals(1,2.0,0,0.4);
+                uInit1[i][j] = sim.set_vals(0.125,0.0,0,0.1);
+                uInit2[i][j] = sim.set_vals(0.125,0.0,0,0.1);
             }
-
+            */
             // ----------------- //
 
             // WANG TEST B
-            /*
+            
             if (x <= 0.5){
                 phiInit[i][j] = (x-0.4);
             } else {
                 phiInit[i][j] = (0.6-x);
             }
-            */
+
+            if (x <= 0.25){
+                uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+                uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+            } else if (x <= 0.4 && x > 0.25){
+                uInit1[i][j] = sim.set_vals(1,0,0,1);
+                uInit2[i][j] = sim.set_vals(1,0,0,1);
+            } else if (x <= 0.6 && x > 0.4){
+                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
+                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
+            } else {
+                uInit1[i][j] = sim.set_vals(1,0,0,1);
+                uInit2[i][j] = sim.set_vals(1,0,0,1);
+            }
+
+            // ----------------- //
+            
+            
 
             //std::cout << i << " " << j << std::endl;
             
@@ -123,24 +140,6 @@ int main(){
             } else {
                 uInit1[i][j] = sim.set_vals(0.125,0,0,0.1);
                 uInit2[i][j] = sim.set_vals(0.125,0,0,0.1);
-            }
-            */
-            
-            
-            /*
-            // WANG B //
-            if (x <= 0.25){
-                uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-                uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-            } else if (x <= 0.4 && x > 0.25){
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
-            } else if (x <= 0.6 && x > 0.4){
-                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
-                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
-            } else {
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
             }
             */
             

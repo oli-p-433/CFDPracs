@@ -31,7 +31,7 @@ void solver::run(){
         //time = 0+(splitFlip*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
-        /*
+        
         this->findBoundary();
         //std::cout << "number of interface cells = " << interfaceCells.size() << std::endl;
         //std::cout << "boundary found" << std::endl;
@@ -67,9 +67,9 @@ void solver::run(){
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
         //std::this_thread::sleep_for(std::chrono::seconds(5));
         //time = realTime;
-        */
+        
         this->setDt();
-        /*
+        
         //realTime = time;
 
         std::cout << "time is " << time << std::endl;
@@ -100,9 +100,7 @@ void solver::run(){
             reinitPhi();
             std::cout << "phi reinitialised" << std::endl;
         }
-        */
-
-        
+    
         splitFlip++;
         if (splitFlip%2 == 0){
             //std::cout << "x first" << std::endl;
@@ -134,8 +132,8 @@ void solver::run(){
         transmissiveBC(fluid1);
         transmissiveBC(fluid2);
 
-        //this->interfaceCells={}; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        //this->freshlyCleared={};
+        this->interfaceCells={};
+        this->freshlyCleared={};
 
         //time = 6+((splitFlip-1)*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
@@ -518,8 +516,10 @@ void solver::SLIC(fluid& fluid, EOS* eos){
 }
 
 std::array<double,4> solver::riemannSolver(std::array<double,4> left,std::array<double,4> right, EOS* eos){
-    riemann solution(eos->get_gamma(),eos->get_gamma(),eos->consvToPrim(left),eos->consvToPrim(right),direction,0,1,0.5,1,2,0,0);
+    riemann solution(eos->get_gamma(),eos->get_gamma(),eos->consvToPrim(left),eos->consvToPrim(right),direction,0,1,0,1,2,0,0);
     std::array<double,4> result = solution.exctRiemann();
+    if (sqrt(result[UX]*result[UX]) < 1e-15){result[UX] = 0.0;}
+    if (sqrt(result[UY]*result[UY]) < 1e-15){result[UY] = 0.0;}
     return result;
 }
 
@@ -553,29 +553,13 @@ void solver::godunov(fluid& fluid, EOS* eos){
     if (direction == XDIR){
         for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
-                fluid.fluxesX[i][j] = flux(riemannSolver(fluid.u[i][j],fluid.u[i][j+1],eos),eos);
-                if (i == 12 && j == 11){
-                    std::cout << "riemann j = 11 " << fluid.u[i][j][RHO] << " " << fluid.u[i][j][UX] << " " << fluid.u[i][j][UY] << " " << fluid.u[i][j][PRES] << fluid.u[i][j+1][RHO] << " " << fluid.u[i][j+1][UX] << " " << fluid.u[i][j+1][UY] << " " << fluid.u[i][j+1][PRES] << std::endl;
-                    print_state(riemannSolver(fluid.u[i][j],fluid.u[i][j+1],eos));
-                }
-                if (i == 12 && j == 12){
-                    std::cout << "riemann j = 11 " << fluid.u[i][j][RHO] << " " << fluid.u[i][j][UX] << " " << fluid.u[i][j][UY] << " " << fluid.u[i][j][PRES] << fluid.u[i][j+1][RHO] << " " << fluid.u[i][j+1][UX] << " " << fluid.u[i][j+1][UY] << " " << fluid.u[i][j+1][PRES] << std::endl;
-                    print_state(riemannSolver(fluid.u[i][j],fluid.u[i][j+1],eos));
-                }
+                fluid.fluxesX[i][j] = flux(riemannSolver(fluid.u[i+nGhost-1][j+1],fluid.u[i+nGhost-1][j+2],eos),eos);
             }
         }
     } else if (direction == YDIR){
-        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { // why am i getting a Y flux of vx? 
+        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
-                fluid.fluxesY[i][j] = flux(riemannSolver(fluid.u[i][j],fluid.u[i+1][j],eos),eos);
-                if (i == 12 && j == 11){
-                    std::cout << "riemann j = 11 " << fluid.u[i][j][RHO] << " " << fluid.u[i][j][UX] << " " << fluid.u[i][j][UY] << " " << fluid.u[i][j][PRES] << fluid.u[i+1][j][RHO] << " " << fluid.u[i+1][j][UX] << " " << fluid.u[i+1][j][UY] << " " << fluid.u[i+1][j][PRES] << std::endl;
-                    print_state(riemannSolver(fluid.u[i][j],fluid.u[i+1][j],eos));
-                }
-                if (i == 12 && j == 12){
-                    std::cout << "riemann j = 11 " << fluid.u[i][j][RHO] << " " << fluid.u[i][j][UX] << " " << fluid.u[i][j][UY] << " " << fluid.u[i][j][PRES] << fluid.u[i+1][j][RHO] << " " << fluid.u[i+1][j][UX] << " " << fluid.u[i+1][j][UY] << " " << fluid.u[i+1][j][PRES] << std::endl;
-                    print_state(riemannSolver(fluid.u[i][j],fluid.u[i+1][j],eos));
-                }
+                fluid.fluxesY[i][j] = flux(riemannSolver(fluid.u[i+1][j+nGhost-1],fluid.u[i+2][j+nGhost-1],eos),eos);
             }
             
         }

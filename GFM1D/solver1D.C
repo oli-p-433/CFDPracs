@@ -81,15 +81,12 @@ void solver::MUSCL(){
     updUBars();
 
     for (size_t i=0; i < u1BarRupd.size()-1; ++i){
-        riemann solution1(eos[0]->get_gamma(),eos[0]->get_gamma(),eos[0]->consvToPrim(u1BarRupd[i]),eos[0]->consvToPrim(u1BarLupd[i+1]),0,1,0.5,1,2,0,0); // need p_inf setup
+        riemann solution1(eos[0]->get_gamma(),eos[0]->get_gamma(),eos[0]->consvToPrim(u1BarRupd[i]),eos[0]->consvToPrim(u1BarLupd[i+1]),0,1,0,1,2,0,0); // need p_inf setup
         fluxes1[i] = flux(solution1.exctRiemann(),eos[0]);
 
-        riemann solution2(eos[1]->get_gamma(),eos[1]->get_gamma(),eos[1]->consvToPrim(u2BarRupd[i]),eos[1]->consvToPrim(u2BarLupd[i+1]),0,1,0.5,1,2,0,0); // need p_inf setup
+        riemann solution2(eos[1]->get_gamma(),eos[1]->get_gamma(),eos[1]->consvToPrim(u2BarRupd[i]),eos[1]->consvToPrim(u2BarLupd[i+1]),0,1,0,1,2,0,0); // need p_inf setup
         fluxes2[i] = flux(solution2.exctRiemann(),eos[1]);
     }
-
-
-
 }
 
 void solver::transmissiveBC(){
