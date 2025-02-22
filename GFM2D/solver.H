@@ -47,7 +47,6 @@ class solver{
         double extrapDt;
 
 
-
         void setDt();
         void laxFriedrichs();
         std::array<double,4> fBurgersLF(std::array<double,4>)const;
@@ -56,10 +55,17 @@ class solver{
 
         void SLIC(fluid&, EOS*);
         void MUSCL(fluid&, EOS*);
+        void godunov(fluid&, EOS*);
+        std::function<void(fluid&, EOS*)> fluxMethod;
+        
+
         std::array<double,4> laxFhalf(const std::array<double,4>, const std::array<double,4>, EOS*)const;
         std::array<double,4> LF(const std::array<double,4>, const std::array<double,4>, EOS*)const;
         void pointsUpdate(fluid&);
         void phiUpdate();
+
+        void reinitPhi();
+
         void neighbourAvg(fluid& f, int, int);
         void fixFreshlyCleared();
 
@@ -67,7 +73,7 @@ class solver{
         void run();
         double calcSoundSpeed(std::array<double,4>);
 
-        std::array<double,4> riemannSolver(std::array<double,4>,std::array<double,4>);
+        std::array<double,4> riemannSolver(std::array<double,4>,std::array<double,4>, EOS*);
 
         // slope limiting
         void calcHalfSlopes(fluid&);
@@ -120,6 +126,7 @@ class solver{
         static void resize2Db(int,int,std::vector < std::vector < std::array<double,2> >>&);
         static void resize2Dc(int,int,std::vector < std::vector < std::array<double,4> >>&);
         static void printScalarField(const std::vector < std::vector < double > >&);
+        void printInterfaceArray(std::vector<std::vector<double>>, std::vector<std::array<int, 2>>&, const std::string&);
 
         // Source term modelling
 
@@ -150,6 +157,8 @@ class solver{
         std::vector< std::vector < double > > phiOld;
         std::vector<std::array<int, 2>> freshlyCleared;
 
+        std::vector< std::vector < double > > phiGrads;
+
 
 
         double x0;
@@ -160,6 +169,10 @@ class solver{
         double endTime;
         double time;
         double slopeWeight;
+        int splitFlip = 0;
+
+        double dtReducer;
+        int maxIter;
 
         double cour;
 

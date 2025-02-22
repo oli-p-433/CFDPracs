@@ -14,11 +14,11 @@
 
 
 int main(){
-    int nCells = 500;
+    int nCells = 20;
     int nGhost = 2;
-    double x0{0}, x1{2};
-    double y0{0}, y1{2};
-    double startTime = 0.0, endTime = 0.10;
+    double x0{0}, x1{1};
+    double y0{0}, y1{1};
+    double startTime = 0.0, endTime = 0.05;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
@@ -45,7 +45,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.1);
+    sim.setWriteInterval(0.01);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,4> input, EOS* eos){
@@ -53,8 +53,12 @@ int main(){
     }; // because fEuler isnt static
 
     sim.slopeLim = [&sim](std::array<double,4> input){
-        return sim.vanLeer(input);
+        return sim.minbee(input);
     }; // because fEuler isnt static
+
+    sim.fluxMethod = [&sim](fluid& f, EOS* e) {
+        sim.godunov(f, e); // Change this to sim.SLIC or sim.godunov as needed
+    };
 
     std::vector< std::vector<std::array<double,4>>> uInit1, uInit2;
     std::vector< std::vector<double>> phiInit;
@@ -67,11 +71,30 @@ int main(){
         double y = y0 + (i-static_cast<double>(sim.ghosts())+0.5)*sim.get_dy();
         for (size_t j=0; j<uInit1[0].size();j++){
             double x = x0 + (j-static_cast<double>(sim.ghosts())+0.5)*sim.get_dx();
-            //phiInit[i][j] = x - 0.5;
-            //phiInit[i][j] = (y + x - 1)/sqrt(2);
+            
+            // RIEMANN PROBLEMS //
 
-            // sod test
-            phiInit[i][j] = -(sqrt((x-1)*(x-1)+(y-1)*(y-1))-0.2);
+            //phiInit[i][j] = (y + x - 1)/sqrt(2);
+            phiInit[i][j] = x - 0.5;
+                        
+            if (x<0.5){ 
+                uInit1[i][j] = sim.set_vals(1,-2.0,0,0.4);
+                uInit2[i][j] = sim.set_vals(1,-2.0,0,0.4);
+            } else {
+                uInit1[i][j] = sim.set_vals(1,2.0,0,0.4);
+                uInit2[i][j] = sim.set_vals(1,2.0,0,0.4);
+            }
+
+            // ----------------- //
+
+            // WANG TEST B
+            /*
+            if (x <= 0.5){
+                phiInit[i][j] = (x-0.4);
+            } else {
+                phiInit[i][j] = (0.6-x);
+            }
+            */
 
             //std::cout << i << " " << j << std::endl;
             
@@ -87,29 +110,39 @@ int main(){
             }
             */
             
-
+            //std::cout << phiInit[i][j] << " ";
+            
+            // SOD TEST //
             /*
-            if (x<=0.5){ 
+            phiInit[i][j] = -(sqrt((x-1)*(x-1)+(y-1)*(y-1))-0.5);
+            
+            // sod (x-1)*(x-1)+(y-1)*(y-1) < 0.4*0.4
+            if ((x-1)*(x-1)+(y-1)*(y-1) < 0.5*0.5){
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
-
             } else {
                 uInit1[i][j] = sim.set_vals(0.125,0,0,0.1);
                 uInit2[i][j] = sim.set_vals(0.125,0,0,0.1);
             }
             */
             
-            //std::cout << phiInit[i][j] << " ";
             
-            
-            
-            if ((x-1)*(x-1)+(y-1)*(y-1) < 0.2*0.2){
+            /*
+            // WANG B //
+            if (x <= 0.25){
+                uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+                uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+            } else if (x <= 0.4 && x > 0.25){
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
+            } else if (x <= 0.6 && x > 0.4){
+                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
+                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
             } else {
-                uInit1[i][j] = sim.set_vals(0.125,0,0,0.1);
-                uInit2[i][j] = sim.set_vals(0.125,0,0,0.1);
+                uInit1[i][j] = sim.set_vals(1,0,0,1);
+                uInit2[i][j] = sim.set_vals(1,0,0,1);
             }
+            */
             
         }
 
@@ -148,10 +181,10 @@ int main(){
 
     // Calculating exact result with exact riemann solver
 
-    std::array<double,4> sL = {1,0,0,1};//{1000,0,1e9};
+    std::array<double,4> sL = {1,-2,0,0.4};//{1000,0,1e9};
     double gamma1 = 1.4;
 
-    std::array<double,4> sR = {0.125,0,0,0.1}; // {50,0,1e5};
+    std::array<double,4> sR = {1,2,0,0.4}; // {50,0,1e5};
     double gamma2 = 1.4;
 
     double time = 0.025;

@@ -106,7 +106,7 @@ std::array<double,4> riemann::solveRiem(double pStar, std::array<double,3> s, bo
 std::array<double,3> riemann::rareFan(std::array<double,3> state, bool left, double x=0){
     std::array<double,3> result = {0,0,0};
     double eps = (x-x_disc)/endTime;
-    std::cout << "Eps = " << eps << std::endl;
+    //std::cout << "Eps = " << eps << std::endl;
     if (left == 1){
         result[1] = (state[1]*(gamma(left)-1)+2.0*(calcSoundSpeed(state,left)+eps))/(gamma(left)+1);
         std::cout << result[1] << std::endl;

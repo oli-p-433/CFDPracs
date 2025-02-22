@@ -11,10 +11,10 @@
 int main(){
 
     // set states
-    std::array<double,3> sL = {1,0,1};//{1000,0,1e9};
+    std::array<double,3> sL = {1,-2,0.4};//{1000,0,1e9};
     double gamma1 = 1.4;
 
-    std::array<double,3> sR = {0.125,0,0.1}; // {50,0,1e5};
+    std::array<double,3> sR = {1,2,0.4}; // {50,0,1e5};
     double gamma2 = 1.4;
 
     double time = 0.25;
