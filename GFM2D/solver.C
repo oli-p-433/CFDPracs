@@ -30,7 +30,7 @@ void solver::run(){
         }
         //time = 0+(splitFlip*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
-
+        
         
         this->findBoundary();
         //std::cout << "number of interface cells = " << interfaceCells.size() << std::endl;
@@ -55,7 +55,7 @@ void solver::run(){
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
         this->setGhostFluids();
-        //std::cout << "setting ghost fluids" << std::endl; 
+        //std::cout << "set ghost fluids" << std::endl; 
 
         transmissiveBC(fluid1);
         transmissiveBC(fluid2);
@@ -81,15 +81,15 @@ void solver::run(){
         //time = 3+(splitFlip*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
-
-        phiUpdate();
-        //std::cout << "phi updated" << std::endl;
+        splitFlip++;
+        phiUpdate(splitFlip);
+        std::cout << "phi updated" << std::endl;
 
         //time = 4+(splitFlip*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
         fixFreshlyCleared();
-        //std::cout << "freshly cleared fixed" << std::endl;
+        std::cout << "freshly cleared fixed" << std::endl;
 
         //time = 5+(splitFlip*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
@@ -100,8 +100,9 @@ void solver::run(){
             reinitPhi();
             std::cout << "phi reinitialised" << std::endl;
         }
-    
-        splitFlip++;
+        
+        
+        std::cout << "Flux calc & point updates" << std::endl;
         if (splitFlip%2 == 0){
             //std::cout << "x first" << std::endl;
             direction = XDIR;
@@ -109,6 +110,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
+            transmissiveBC(fluid1);
+            transmissiveBC(fluid2);
             direction = YDIR;
             this->fluxMethod(fluid1,eos[0]);
             this->pointsUpdate(fluid1);
@@ -121,6 +124,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
+            transmissiveBC(fluid1);
+            transmissiveBC(fluid2);
             direction = XDIR;
             this->fluxMethod(fluid1,eos[0]);
             this->pointsUpdate(fluid1);
@@ -207,7 +212,7 @@ void solver::findBoundary(){ // checks for change in sign of level set. emplaces
         std::cout << interfaceCells[i][1] << " ";
     }
         */
-    
+    printInterfaceArray(phi, interfaceCells, "interface.txt");
 
 }
 
@@ -335,9 +340,11 @@ void solver::interfaceRiem(){
         std::array<double,4> lState = {interfaceStates[i][0][0],resolvedVelocities[i][0][0],resolvedVelocities[i][0][1],interfaceStates[i][0][3]};  
         std::array<double,4> rState = {interfaceStates[i][1][0],resolvedVelocities[i][1][0],resolvedVelocities[i][1][1],interfaceStates[i][1][3]};
 
-        riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),eos[0]->consvToPrim(lState),eos[1]->consvToPrim(rState),1,1,0.5,0.12,100,0,0); // need p_inf setup
+        riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),eos[0]->consvToPrim(lState),eos[1]->consvToPrim(rState),1,-1.5*dx,1.5*dx,0,dt,2,0,0); // need p_inf setup
         //std::cout << "riemann solver object initialised" << std::endl;
         std::array<double,4> result = solution.exctRiemann();
+        //if (sqrt(result[UX]*result[UX]) < 1e-4){result[UX] = 0.0;}
+        //if (sqrt(result[UY]*result[UY]) < 1e-4){result[UY] = 0.0;}
         riemInterfaceStates[i] = result;
         //solution.exctRiemann();
     }
@@ -387,8 +394,8 @@ void solver::setInterface(){ // ind = 0 for fluid1, 1 for fluid2
     // setting uExtrap to the ghost fluids
     //std::cout << "no of star states = " << starStates.size() << std::endl;
     for (size_t i = 0; i<starStates.size(); ++i){
-        fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]] = eos[1]->primToConsv(starStates[i][1]); // interface states set to u*L
-        if (phi[interfaceCells[i][0]+1][interfaceCells[i][1]] > 0){ // surrounding states set to u*R
+        fluid2.u[interfaceCells[i][0]][interfaceCells[i][1]] = eos[1]->primToConsv(starStates[i][1]); // interface states set to u*R
+        if (phi[interfaceCells[i][0]+1][interfaceCells[i][1]] > 0){ // surrounding states set to u*L
             fluid1.u[interfaceCells[i][0]+1][interfaceCells[i][1]] = eos[0]->primToConsv(starStates[i][0]);
         }
         if (phi[interfaceCells[i][0]][interfaceCells[i][1]+1] > 0){
@@ -427,8 +434,8 @@ void solver::calcnDotPhiNormals(){
             for (int var = 0; var < 4; ++var){
                 xCom[var] = (phiNormals[i][j][0] > 0) ? phiNormals[i][j][0]*(fluid1.u[i][j][var]-fluid1.u[i][j-1][var])/dx : phiNormals[i][j][0]*(fluid1.u[i][j+1][var]-fluid1.u[i][j][var])/dx;
                 yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid1.u[i][j][var]-fluid1.u[i-1][j][var])/dy : phiNormals[i][j][1]*(fluid1.u[i+1][j][var]-fluid1.u[i][j][var])/dy;
-                fluid1.nDotGradPhi[i][j] = xCom + yCom;
             }
+            fluid1.nDotGradPhi[i][j] = xCom + yCom;
         }
     }
     //std::cout << "ndotgradphi = " << fluid1.nDotGradPhi[10][12][0] << std::endl;
@@ -441,14 +448,15 @@ void solver::calcnDotPhiNormals(){
                 yCom[var] = (phiNormals[i][j][1] > 0) ? phiNormals[i][j][1]*(fluid2.u[i+1][j][var]-fluid2.u[i][j][var])/dy : phiNormals[i][j][1]*(fluid2.u[i][j][var]-fluid2.u[i-1][j][var])/dy;
                 //std::cout << fluid2.u[i][j+1][var] << " " << fluid2.u[i][j][var] << " " << fluid2.u[i][j-1][var] << std::endl;
                 //std::cout << xCom[0] << " " << yCom[0] << std::endl;
-                fluid2.nDotGradPhi[i][j] = xCom + yCom;
+            }   
+            fluid2.nDotGradPhi[i][j] = xCom + yCom;
                 //std::cout << "ndotgradphi (2) = " << fluid2.nDotGradPhi[i][j][0] << std::endl;
 
-            }
         }
     }
-
 }
+
+
 
 void solver::eikonalDt(){
     double aMax = 1e-15;
@@ -473,10 +481,14 @@ void solver::setGhostFluids(){
     }
 
     calcPhiNormals();
+    std::cout<< "phi normals calculated" << std::endl;
     for (int iter = 0; iter < maxIter; ++iter){
         setInterface();
+        std::cout << "interface set" << std::endl;
         calcnDotPhiNormals();
+        std::cout << "nDotPhiNormals calculated" << std::endl;
         eikonalDt();
+        std::cout << "eikonal dt calculated" << std::endl;
 
         for (int i = nGhost; i < nCells+nGhost; ++i){
             for (int j = nGhost; j < nCells+nGhost; ++j){
@@ -489,6 +501,53 @@ void solver::setGhostFluids(){
 
 }
 
+void solver::laxFriedrichs(fluid& fluid, EOS* eos){
+    if (direction == XDIR){
+        for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
+            for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
+                fluid.fluxesX[i][j] = LF(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost-1][j+nGhost],eos); // fluxes stored in conserved variable form
+            }
+        }
+    } else if (direction == YDIR){
+        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { 
+            for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
+                fluid.fluxesY[i][j] = LF(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost][j+nGhost-1],eos); // fluxes stored in conserved variable form
+            }
+        }
+    }
+}
+
+void solver::richt(fluid& fluid, EOS* eos){
+    if (direction == XDIR){
+        for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
+            for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
+                fluid.fluxesX[i][j] = flux(eos->consvToPrim(laxFhalf(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost-1][j+nGhost],eos)),eos); // fluxes stored in conserved variable form
+            }
+        }
+    } else if (direction == YDIR){
+        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { 
+            for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
+                fluid.fluxesY[i][j] = flux(eos->consvToPrim(laxFhalf(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost][j+nGhost-1],eos)),eos); // fluxes stored in conserved variable form
+            }
+        }
+    }
+}
+
+void solver::FORCE(fluid& fluid, EOS* eos){
+    if (direction == XDIR){
+        for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
+            for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
+                fluid.fluxesX[i][j] = 0.5*(flux(eos->consvToPrim(laxFhalf(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost-1][j+nGhost],eos)),eos)+LF(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost-1][j+nGhost],eos)); // fluxes stored in conserved variable form
+            }
+        }
+    } else if (direction == YDIR){
+        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { 
+            for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
+                fluid.fluxesY[i][j] = 0.5*(flux(eos->consvToPrim(laxFhalf(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost][j+nGhost-1],eos)),eos)+LF(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost][j+nGhost-1],eos)); // fluxes stored in conserved variable form
+            }
+        }
+    }
+}
 
 void solver::SLIC(fluid& fluid, EOS* eos){
 
@@ -513,14 +572,84 @@ void solver::SLIC(fluid& fluid, EOS* eos){
             }
         }
     }
+    /*
+    std::cout << "u" << std::endl;
+    print_arr(fluid.u,RHO);
+    if (direction == YDIR){
+        
+        std::cout << "half slopes" << std::endl;
+        print_arr(fluid.halfSlopesY,RHO);
+        std::cout << "r" << std::endl;
+        print_arr(fluid.rY,RHO);
+        std::cout << "uBarsLY" << std::endl;
+        print_arr(fluid.uBarLY,RHO);
+        std::cout << "uBarsRY" << std::endl;
+        print_arr(fluid.uBarRY,RHO);
+        std::cout << "fluxesY" << std::endl;
+        print_arr(fluid.fluxesY,RHO);
+    } else {
+        std::cout << "half slopes" << std::endl;
+        print_arr(fluid.halfSlopesX,RHO);
+        std::cout << "r" << std::endl;
+        print_arr(fluid.rX,RHO);
+        std::cout << "uBarsLX" << std::endl;
+        print_arr(fluid.uBarLX,RHO);
+        std::cout << "uBarsRX" << std::endl;
+        print_arr(fluid.uBarRX,RHO);
+        std::cout << "fluxesX" << std::endl;
+        print_arr(fluid.fluxesX,RHO);
+
+    }
+        */
 }
 
 std::array<double,4> solver::riemannSolver(std::array<double,4> left,std::array<double,4> right, EOS* eos){
-    riemann solution(eos->get_gamma(),eos->get_gamma(),eos->consvToPrim(left),eos->consvToPrim(right),direction,0,1,0,1,2,0,0);
+    riemann solution(eos->get_gamma(),eos->get_gamma(),eos->consvToPrim(left),eos->consvToPrim(right),direction,-0.5*dx,0.5*dx,0,dt,2,0,0);
     std::array<double,4> result = solution.exctRiemann();
-    if (sqrt(result[UX]*result[UX]) < 1e-15){result[UX] = 0.0;}
-    if (sqrt(result[UY]*result[UY]) < 1e-15){result[UY] = 0.0;}
+    //if (sqrt(result[UX]*result[UX]) < 1e-4){result[UX] = 0.0;}
+    //if (sqrt(result[UY]*result[UY]) < 1e-4){result[UY] = 0.0;}
     return result;
+}
+
+std::array<double,4> solver::HLLC(std::array<double,4> left,std::array<double,4> right, EOS* eos){ // takes conserved variables
+    std::array<double,4> HLLFlux;
+    double SL = 0.0, SR = 0.0;
+    std::array<double,4> LPrim = eos->consvToPrim(left);
+    std::array<double,4> RPrim = eos->consvToPrim(right);
+
+    if (direction == XDIR){
+        double SPlus = std::max(abs(LPrim[UX])+eos->calcSoundSpeed(LPrim),abs(RPrim[UX])+eos->calcSoundSpeed(RPrim));
+        SL = -SPlus; SR = SPlus;
+        //SL = LPrim[UX]-eos->calcSoundSpeed(LPrim);
+        //SR = RPrim[UX]+eos->calcSoundSpeed(RPrim);
+
+        if (0 <= SL){
+            HLLFlux = flux(LPrim,eos);
+        } else if (0 >= SR){
+            HLLFlux = flux(RPrim,eos);
+        } else {
+            double Sdiff = SR - SL;
+            if (std::abs(Sdiff) < 1e-8) Sdiff = (SL < 0) ? -1e-8 : 1e-8;
+            HLLFlux = (1/(Sdiff))*(SR*flux(LPrim,eos)-SL*flux(RPrim,eos)+SL*SR*(right-left));
+        }
+
+    } else {
+        double SPlus = std::max(abs(LPrim[UY])+eos->calcSoundSpeed(LPrim),abs(RPrim[UY])+eos->calcSoundSpeed(RPrim));
+        SL = -SPlus; SR = SPlus;
+        //SL = LPrim[UY]-eos->calcSoundSpeed(LPrim);
+        //SR = RPrim[UY]+eos->calcSoundSpeed(RPrim);
+
+        if (0 <= SL){
+            HLLFlux = flux(LPrim,eos);
+        } else if (0 >= SR){
+            HLLFlux = flux(RPrim,eos);
+        } else {
+            double Sdiff = SR - SL;
+            if (std::abs(Sdiff) < 1e-8) Sdiff = (SL < 0) ? -1e-8 : 1e-8;
+            HLLFlux = (1/(Sdiff))*(SR*flux(LPrim,eos)-SL*flux(RPrim,eos)+SL*SR*(right-left));
+        }
+    }
+    return HLLFlux;
 }
 
 void solver::MUSCL(fluid& fluid, EOS* eos){
@@ -537,12 +666,14 @@ void solver::MUSCL(fluid& fluid, EOS* eos){
         for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
                 fluid.fluxesX[i][j] = flux(riemannSolver(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1],eos),eos);
+                //fluid.fluxesX[i][j] = HLLC(fluid.uBarRX[i][j],fluid.uBarLX[i][j+1],eos);
             }
         }
     } else if (direction == YDIR){
         for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { // why am i getting a Y flux of vx? 
             for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
                 fluid.fluxesY[i][j] = flux(riemannSolver(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j],eos),eos);
+                //fluid.fluxesY[i][j] = HLLC(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j],eos);
             }
         }
     }
@@ -553,13 +684,15 @@ void solver::godunov(fluid& fluid, EOS* eos){
     if (direction == XDIR){
         for (size_t i = 0; i < fluid.fluxesX.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesX[0].size(); ++j) {
-                fluid.fluxesX[i][j] = flux(riemannSolver(fluid.u[i+nGhost-1][j+1],fluid.u[i+nGhost-1][j+2],eos),eos);
+                fluid.fluxesX[i][j] = flux(riemannSolver(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost-1][j+nGhost],eos),eos);
+                //fluid.fluxesX[i][j] = HLLC(fluid.u[i+nGhost-1][j+1],fluid.u[i+nGhost-1][j+2],eos);
             }
         }
     } else if (direction == YDIR){
         for (size_t i = 0; i < fluid.fluxesY.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
-                fluid.fluxesY[i][j] = flux(riemannSolver(fluid.u[i+1][j+nGhost-1],fluid.u[i+2][j+nGhost-1],eos),eos);
+                fluid.fluxesY[i][j] = flux(riemannSolver(fluid.u[i+nGhost-1][j+nGhost-1],fluid.u[i+nGhost][j+nGhost-1],eos),eos);
+                //fluid.fluxesY[i][j] = HLLC(fluid.u[i+1][j+nGhost-1],fluid.u[i+2][j+nGhost-1],eos);
             }
             
         }
@@ -646,49 +779,86 @@ void solver::phiBC(){
     }
 }
 
-void solver::phiUpdate(){
+void solver::phiUpdate(int splitFlip){
     phiBC();
 
     double uVal;
 
     phiOld = phi;
+    if (splitFlip%2 == 0){
+        for (std::vector<double>::size_type i = nGhost-1; i < phi.size()-nGhost+1; ++i){
+            for (std::vector<double>::size_type j = nGhost; j < phi[0].size() - nGhost; ++j) {
+                if (phi[i][j] >= 0){
+                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
+                } else {
+                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
+                }
 
-    for (std::vector<double>::size_type i = nGhost-1; i < phi.size()-nGhost+1; ++i){
-        for (std::vector<double>::size_type j = nGhost; j < phi[0].size() - nGhost; ++j) {
-            if (phi[i][j] >= 0){
-                uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
-            } else {
-                uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
-            }
-
-            if (uVal >= 0){
-                phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
-            } else {
-                phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-            }
-        }
-    }
-
-    phi = phiPlus1;
-    //print_arr(u,RHO);
-    //std::cout << "phiX updated" << std::endl;
-    for (std::vector<double>::size_type i = nGhost; i < phi.size()-nGhost; ++i){ // this is the part that causes vx to grow
-        for (std::vector<double>::size_type j = nGhost-1; j < phi[0].size() - nGhost+1; ++j) {
-            if (phi[i][j] >= 0){
-                uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
-            } else {
-                uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
-            }
-            
-            if (uVal >= 0){
-                phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
-            } else {
-                phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                if (uVal >= 0){
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
+                } else {
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                }
             }
         }
-    }
 
-    phi = phiPlus1;
+        phi = phiPlus1;
+        //print_arr(u,RHO);
+        //std::cout << "phiX updated" << std::endl;
+        for (std::vector<double>::size_type i = nGhost; i < phi.size()-nGhost; ++i){ // this is the part that causes vx to grow
+            for (std::vector<double>::size_type j = nGhost-1; j < phi[0].size() - nGhost+1; ++j) {
+                if (phi[i][j] >= 0){
+                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
+                } else {
+                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
+                }
+                
+                if (uVal >= 0){
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
+                } else {
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                }
+            }
+        }
+
+        phi = phiPlus1;
+    } else {
+        for (std::vector<double>::size_type i = nGhost; i < phi.size()-nGhost; ++i){ // this is the part that causes vx to grow
+            for (std::vector<double>::size_type j = nGhost-1; j < phi[0].size() - nGhost+1; ++j) {
+                if (phi[i][j] >= 0){
+                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
+                } else {
+                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
+                }
+                
+                if (uVal >= 0){
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
+                } else {
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                }
+            }
+        }
+
+        phi = phiPlus1;
+
+        for (std::vector<double>::size_type i = nGhost-1; i < phi.size()-nGhost+1; ++i){
+            for (std::vector<double>::size_type j = nGhost; j < phi[0].size() - nGhost; ++j) {
+                if (phi[i][j] >= 0){
+                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
+                } else {
+                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
+                }
+
+                if (uVal >= 0){
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
+                } else {
+                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                }
+            }
+        }
+
+        phi = phiPlus1;
+    }
 
     // identify freshly cleared cells
     for (size_t i = 0; i<phiOld.size(); ++i){
@@ -754,13 +924,12 @@ void solver::fixFreshlyCleared(){
     }
 }
 
-void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y 
+void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y ; phiSign = 0 for negative phi, 1 for positive phi
     //cylTransmissiveBC();
     if (direction == XDIR){
-        for (std::vector<double>::size_type i = nGhost-1; i < fluid.u.size()-nGhost+1; ++i){
+        for (std::vector<double>::size_type i = nGhost-1 ; i < fluid.u.size()-nGhost+1; ++i){
             for (std::vector<double>::size_type j = nGhost; j < fluid.u[0].size() - nGhost; ++j) {
                 fluid.uPlus1[i][j] = fluid.u[i][j] - (dt / dx) * (fluid.fluxesX[i-nGhost+1][j-nGhost+1] - fluid.fluxesX[i-nGhost+1][j-nGhost]); // flux[i + 1] and flux[i] for the update
-
             }
         }
         fluid.u = fluid.uPlus1;
@@ -836,6 +1005,7 @@ void solver::calcHalfSlopes(fluid& fluid){ // only using y-gradient - ie corresp
         for (size_t i = 0; i < fluid.halfSlopesX.size(); ++i){
             for (size_t j = 0; j < fluid.halfSlopesX[0].size(); ++j){
                 fluid.halfSlopesX[i][j] = fluid.u[i+nGhost-1][j+nGhost-1]-fluid.u[i+nGhost-1][j+nGhost-2];
+                // i + nGhost - 1 is the second-outermost row/column
             }
         }
     } else {
@@ -852,12 +1022,14 @@ void solver::calcr(fluid& fluid){ // DONE
         for (size_t i = 0; i < fluid.rX.size(); ++i){
             for (size_t j = 0; j < fluid.rX[0].size(); ++j){
                 fluid.rX[i][j] = elementDivide(fluid.halfSlopesX[i][j],fluid.halfSlopesX[i][j+1]);
+                //fluid.rX[i][j] = {0,0,0,0};
             }
         }
     } else {
         for (size_t i = 0; i < fluid.rY.size(); ++i){
             for (size_t j = 0; j < fluid.rY[0].size(); ++j){
                 fluid.rY[i][j] = elementDivide(fluid.halfSlopesY[i][j],fluid.halfSlopesY[i+1][j]);
+                //fluid.rY[i][j] = {0,0,0,0};
             }
         }
     };
@@ -929,10 +1101,10 @@ std::array<double,4> solver::minbee(std::array<double,4> slp){
     std::array<double,4> minbArr{0,0,0,0};
     double minb;
     for (int k = 0; k<4; ++k){
-        if (slp[k] <= 0 || slp[k] == INFINITY){
+        if (slp[k] <= 0 || slp[k] == INFINITY || slp[k] == -INFINITY){
             minb = 0;
         } else if (slp[k] > 1){
-            minb = std::min(1.0,2.0/(1+slp[k]));
+            minb = std::min(1.0,2.0/(1.0+slp[k]));
         } else {
             minb = slp[k];
         }
@@ -940,7 +1112,7 @@ std::array<double,4> solver::minbee(std::array<double,4> slp){
     };
     auto minminB = std::min_element(minbArr.begin(),minbArr.end());
     double minBval = *minminB;
-    //return {minbArr[3],minbArr[3],minbArr[3],minbArr[3]};
+    //return {minbArr[0],minbArr[0],minbArr[0],minbArr[0]};
     return {minBval,minBval,minBval,minBval};
     //return minbArr;
 };
@@ -959,7 +1131,26 @@ std::array<double,4> solver::vanLeer(std::array<double,4> slp){
     double minBval = *minminB;
     //return {minbArr[3],minbArr[3],minbArr[3],minbArr[3]};
     return minbArr;
+    
     //return {minBval,minBval,minBval,minBval};
+};
+
+std::array<double,4> solver::vanAlbada(std::array<double,4> slp){
+    std::array<double,4> minbArr{0,0,0,0};
+    double minb;
+    for (int k = 0; k<4; ++k){
+        if (slp[k] <= 0 || slp[k] == INFINITY || slp[k] == -INFINITY){
+            minb = 0;
+        } else {
+            minb = std::min((slp[k]*(1.0+slp[k])/(1.0+slp[k]*slp[k])),2.0/(1.0+slp[k]));
+        }
+        minbArr[k] = minb;
+    };
+    auto minminB = std::min_element(minbArr.begin(),minbArr.end());
+    double minBval = *minminB;
+    //return {minbArr[0],minbArr[0],minbArr[0],minbArr[0]};
+    return {minBval,minBval,minBval,minBval};
+    //return minbArr;
 };
 
 
@@ -987,7 +1178,7 @@ void solver::print_arr(std::vector < std::vector< std::array<double,4> > > arr, 
 
             // Use std::ostringstream to format the number to 6 decimal places
             std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2) << arr[j][i][var];
+            oss << std::fixed << std::setprecision(3) << arr[j][i][var];
 
             // Append the formatted string to the row
             row += oss.str();
@@ -1092,6 +1283,7 @@ void solver::setDt(){
 
         }
     }
+    //if (time > 0.16){writeInterval = 0.001;}
     dt = dtReducer * cour * std::min(dx,dy) / std::fabs(aMax);
 
     double writeTime = writeInterval*(std::floor((time+1e-9) / writeInterval)+1); //returing 0.29?
@@ -1230,6 +1422,12 @@ std::array<double, 4> operator-(const std::array<double, 4>& lhs, const std::arr
     std::array<double, 4> result;
     for (std::size_t i = 0; i < 4; ++i) {
         result[i] = lhs[i] - rhs[i];
+        if (std::isnan(result[i]) == 1){
+            std::cout << "LHS:" << lhs[0] << " " << lhs[1] << " " << lhs[2] << " " << lhs[3] << std::endl;
+            std::cout << "RHS:" << rhs[0] << " " << rhs[1] << " " << rhs[2] << " " << rhs[3] << std::endl;
+            std::cout << result[0] << " " << result[1] << " " << result[2] << " " << result[3] << std::endl;
+            throw std::runtime_error("element subtract error");
+        }
     }
     return result;
 }
@@ -1238,6 +1436,12 @@ std::array<double, 4> operator+(const std::array<double, 4>& lhs, const std::arr
     std::array<double, 4> result;
     for (std::size_t i = 0; i < 4; ++i) {
         result[i] = lhs[i] + rhs[i];
+        if (std::isnan(result[i]) == 1){
+            std::cout << "LHS:" << lhs[0] << " " << lhs[1] << " " << lhs[2] << " " << lhs[3] << std::endl;
+            std::cout << "RHS:" << rhs[0] << " " << rhs[1] << " " << rhs[2] << " " << rhs[3] << std::endl;
+            std::cout << result[0] << " " << result[1] << " " << result[2] << " " << result[3] << std::endl;
+            throw std::runtime_error("element add error");
+        }
     }
     return result;
 }
@@ -1246,6 +1450,11 @@ std::array<double, 4> operator*(const double scalar,const std::array<double, 4>&
     std::array<double, 4> result;
     for (std::size_t i = 0; i < 4; ++i) {
         result[i] = scalar*lhs[i];
+        if (std::isnan(result[i]) == 1){
+            std::cout << "LHS:" << lhs[0] << " " << lhs[1] << " " << lhs[2] << " " << lhs[3] << std::endl;
+            std::cout << result[0] << " " << result[1] << " " << result[2] << " " << result[3] << std::endl;
+            throw std::runtime_error("scalar multiply error");
+        }
     }
     return result;
 }
@@ -1254,6 +1463,12 @@ std::array<double, 4> operator*(const std::array<double, 4>& rhs,const std::arra
     std::array<double, 4> result;
     for (std::size_t i = 0; i < 4; ++i) {
         result[i] = rhs[i]*lhs[i];
+        if (std::isnan(result[i]) == 1){
+            std::cout << "LHS:" << lhs[0] << " " << lhs[1] << " " << lhs[2] << " " << lhs[3] << std::endl;
+            std::cout << "RHS:" << rhs[0] << " " << rhs[1] << " " << rhs[2] << " " << rhs[3] << std::endl;
+            std::cout << result[0] << " " << result[1] << " " << result[2] << " " << result[3] << std::endl;
+            throw std::runtime_error("element multiply error");
+        }
     }
     return result;
 }
@@ -1267,9 +1482,17 @@ std::array<double, 4> elementDivide(const std::array<double, 4>& lhs, const std:
         else if (rhs[i] == 0){
             result[i] = INFINITY;
         }
-        else{
+        else {
             result[i] = lhs[i] / rhs[i];
         }
+        if (std::isnan(result[i]) == 1){
+            std::cout << "LHS:" << lhs[0] << " " << lhs[1] << " " << lhs[2] << " " << lhs[3] << std::endl;
+            std::cout << "RHS:" << rhs[0] << " " << rhs[1] << " " << rhs[2] << " " << rhs[3] << std::endl;
+            std::cout << result[0] << " " << result[1] << " " << result[2] << " " << result[3] << std::endl;
+            throw std::runtime_error("element divide error");
+        }
+
+
     }
     return result;
 }
@@ -1278,6 +1501,11 @@ std::array<double, 4> operator/(const std::array<double, 4>& lhs, const double s
     std::array<double, 4> result;
     for (std::size_t i = 0; i < 4; ++i) {
         result[i] = lhs[i]/scalar;
+        if (std::isnan(result[i]) == 1){
+            std::cout << "LHS:" << lhs[0] << " " << lhs[1] << " " << lhs[2] << " " << lhs[3] << std::endl;
+            std::cout << result[0] << " " << result[1] << " " << result[2] << " " << result[3] << std::endl;
+            throw std::runtime_error("scalar divide error");
+        }
     }
     return result;
 }

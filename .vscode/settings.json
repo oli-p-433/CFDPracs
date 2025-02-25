@@ -76,6 +76,7 @@
         "solver1D.C": "cpp",
         "filesystem": "cpp",
         "fvm1D.C": "cpp",
-        "riemann.C": "cpp"
+        "riemann.C": "cpp",
+        "EOS.C": "cpp"
     }
 }

@@ -14,11 +14,11 @@
 
 
 int main(){
-    int nCells = 400;
+    int nCells = 200;
     int nGhost = 2;
-    double x0{0}, x1{1};
-    double y0{0}, y1{1};
-    double startTime = 0.0, endTime = 0.3;
+    double x0{0}, x1{3};
+    double y0{0}, y1{3};
+    double startTime = 0.0, endTime = 3;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
@@ -45,7 +45,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.05);
+    sim.setWriteInterval(0.2);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,4> input, EOS* eos){
@@ -53,7 +53,7 @@ int main(){
     }; // because fEuler isnt static
 
     sim.slopeLim = [&sim](std::array<double,4> input){
-        return sim.minbee(input);
+        return sim.vanLeer(input);
     }; // because fEuler isnt static
 
     sim.fluxMethod = [&sim](fluid& f, EOS* e) {
@@ -74,40 +74,46 @@ int main(){
             
             // RIEMANN PROBLEMS //
             /*
+            // toro3 -- 1.0,0.0,0.0,1000 -- 1.0, 0.0, 0.0, 0.01
+            // toro5 -- 5.99924,0,19.5975,460.894 -- 5.99242,0,-6.19633,46.0950
             //phiInit[i][j] = (y + x - 1)/sqrt(2);
             phiInit[i][j] = y - 0.5;
                         
-            if (x+y<1){ 
-                uInit1[i][j] = sim.set_vals(1,0.0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0.0,0,1);
+            if (y<0.5){ 
+                uInit1[i][j] = sim.set_vals(1,0,-2,0.4); // 1,0.0,0.0,1 -- 0.125,0.0,0,0.1 -- toro1
+                uInit2[i][j] = sim.set_vals(1,0,-2,0.4); // 1,0,-2,0.4 -- 1,0,2,0.4 -- toro2
             } else {
-                uInit1[i][j] = sim.set_vals(0.125,0.0,0,0.1);
-                uInit2[i][j] = sim.set_vals(0.125,0.0,0,0.1);
+                uInit1[i][j] = sim.set_vals(1,0,2,0.4);
+                uInit2[i][j] = sim.set_vals(1,0,2,0.4);
             }
-            */
+                */
+                
+            
             // ----------------- //
 
             // WANG TEST B
-            
-            if (x <= 0.5){
-                phiInit[i][j] = (x-0.4);
+            /*
+            if (y <= 0.5){
+                phiInit[i][j] = (y-0.4);
             } else {
-                phiInit[i][j] = (0.6-x);
+                phiInit[i][j] = (0.6-y);
             }
 
-            if (x <= 0.25){
-                uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-                uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-            } else if (x <= 0.4 && x > 0.25){
+            if (y <= (0.25)){
+                uInit1[i][j] = sim.set_vals(1.3765,0,0.3948,1.57);
+                uInit2[i][j] = sim.set_vals(1.3765,0,0.3948,1.57);
+            } else if (y <= 0.4 && y > 0.25){
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
-            } else if (x <= 0.6 && x > 0.4){
+            } else if (y <= 0.6 && y > 0.4){
                 uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
                 uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
             } else {
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
             }
+            */
+            
 
             // ----------------- //
             
@@ -130,18 +136,21 @@ int main(){
             //std::cout << phiInit[i][j] << " ";
             
             // SOD TEST //
-            /*
-            phiInit[i][j] = -(sqrt((x-1)*(x-1)+(y-1)*(y-1))-0.5);
+            
+            phiInit[i][j] = -(sqrt((x-0.5)*(x-0.5)+(y-1.5)*(y-1.5))-0.3);
             
             // sod (x-1)*(x-1)+(y-1)*(y-1) < 0.4*0.4
-            if ((x-1)*(x-1)+(y-1)*(y-1) < 0.5*0.5){
+            if ((x-0.5)*(x-0.5)+(y-1.5)*(y-1.5) < 0.3*0.3){
+                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
+                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
+            } else if (x<=0.100){
+                uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+                uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+            } else {
                 uInit1[i][j] = sim.set_vals(1,0,0,1);
                 uInit2[i][j] = sim.set_vals(1,0,0,1);
-            } else {
-                uInit1[i][j] = sim.set_vals(0.125,0,0,0.1);
-                uInit2[i][j] = sim.set_vals(0.125,0,0,0.1);
             }
-            */
+            
             
         }
 
@@ -167,8 +176,8 @@ int main(){
 
     // Initialising u fields: //
 
-    for (std::vector<double>::size_type i=sim.ghosts(); i<uInit1.size()-sim.ghosts();i++){
-        for (std::vector<double>::size_type j=sim.ghosts(); j<uInit1.size()-sim.ghosts();j++){
+    for (std::vector<double>::size_type i=0; i<uInit1.size();i++){
+        for (std::vector<double>::size_type j=0; j<uInit1.size();j++){
             uInit1[i][j] = sim.eos[0]->primToConsv(uInit1[i][j]);
             uInit2[i][j] = sim.eos[1]->primToConsv(uInit2[i][j]);
         }
@@ -186,7 +195,7 @@ int main(){
     std::array<double,4> sR = {1,2,0,0.4}; // {50,0,1e5};
     double gamma2 = 1.4;
 
-    double time = 0.025;
+    double time = 0.15;
     double discPosition = 0.5;
 
     riemann solution(gamma1,gamma2,sL,sR,1,0,1,discPosition,time,100,0,0);

@@ -6,7 +6,7 @@
 
 // Sound speeds
 
-double idealGas::calcSoundSpeed(const std::array<double,4> arr){
+double idealGas::calcSoundSpeed(const std::array<double,4> arr){ // takes primitive variables
     return std::sqrt(gamma*arr[PRES]/arr[RHO]);
 }
 
@@ -24,7 +24,7 @@ double EOS::get_gamma(){
 
 std::array<double,4> idealGas::primToConsv(std::array<double,4> arr)const{
     std::array<double,4> result;
-    assert(arr[RHO] != 0);
+    assert(arr[RHO] >= 0);
     result[RHO] = arr[RHO]; // rho
     result[XMOM] = arr[RHO]*arr[XMOM]; // rho*vx
     result[YMOM] = arr[RHO]*arr[YMOM]; // rho*vx
@@ -34,7 +34,7 @@ std::array<double,4> idealGas::primToConsv(std::array<double,4> arr)const{
 
 std::array<double,4> idealGas::consvToPrim(std::array<double,4> arr)const{
     std::array<double,4> result;
-    assert(arr[RHO] != 0);
+    assert(arr[RHO] >= 0);
     result[RHO] = arr[RHO];
     result[UX] = arr[XMOM]/arr[RHO];
     result[UY] = arr[YMOM]/arr[RHO];
@@ -45,7 +45,7 @@ std::array<double,4> idealGas::consvToPrim(std::array<double,4> arr)const{
 
 std::array<double,4> stiffenedGas::primToConsv(std::array<double,4> arr)const{
     std::array<double,4> result;
-    assert(arr[RHO] != 0);
+    assert(arr[RHO] >= 0);
     result[RHO] = arr[RHO]; // rho
     result[XMOM] = arr[RHO]*arr[XMOM]; // rho*vx
     result[YMOM] = arr[RHO]*arr[YMOM]; // rho*vy
@@ -55,7 +55,7 @@ std::array<double,4> stiffenedGas::primToConsv(std::array<double,4> arr)const{
 
 std::array<double,4> stiffenedGas::consvToPrim(std::array<double,4> arr)const{
     std::array<double,4> result;
-    assert(arr[RHO] != 0);
+    assert(arr[RHO] >= 0);
     result[RHO] = arr[RHO];
     result[UX] = arr[XMOM]/arr[RHO];
     result[UY] = arr[YMOM]/arr[RHO];

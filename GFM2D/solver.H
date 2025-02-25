@@ -48,7 +48,9 @@ class solver{
 
 
         void setDt();
-        void laxFriedrichs();
+        void laxFriedrichs(fluid&,EOS*);
+        void richt(fluid&,EOS*);
+        void FORCE(fluid&,EOS*);
         std::array<double,4> fBurgersLF(std::array<double,4>)const;
         std::array<double,4> finvectLF(std::array<double,4>)const;
         std::array<double,4> fEuler(std::array<double,4>,EOS*);
@@ -56,13 +58,16 @@ class solver{
         void SLIC(fluid&, EOS*);
         void MUSCL(fluid&, EOS*);
         void godunov(fluid&, EOS*);
+
         std::function<void(fluid&, EOS*)> fluxMethod;
+
+        std::array<double,4> HLLC(std::array<double,4>,std::array<double,4>, EOS*);
         
 
         std::array<double,4> laxFhalf(const std::array<double,4>, const std::array<double,4>, EOS*)const;
         std::array<double,4> LF(const std::array<double,4>, const std::array<double,4>, EOS*)const;
         void pointsUpdate(fluid&);
-        void phiUpdate();
+        void phiUpdate(int);
 
         void reinitPhi();
 
@@ -85,6 +90,7 @@ class solver{
         
         std::array<double,4> minbee(std::array<double,4>);
         std::array<double,4> vanLeer(std::array<double,4>);
+        std::array<double,4> vanAlbada(std::array<double,4>);
 
         //
 

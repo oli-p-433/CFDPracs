@@ -3,6 +3,7 @@ print "Variable to plot: " . variable_name
 
 # Dynamically construct the file path based on the variable name
 files = system("ls ./".directory_name."/".variable_name."/[0-9]*")
+file = system("ls ./".directory_name."/".variable_name."/".timestamp."")
 #print("Files: " . files)
 last_file = word(files, words(files))
 exact_file = system("ls ./".directory_name."/".variable_name."Exact/[0-9]*")
@@ -14,7 +15,7 @@ set style line 2 lt 2 lw 2 dashtype 2   # Dotted line (lt 2 is the line type for
 
 #plot for [file in files] file using 1:($4 < 0 ? $2 : 1/0) with lines,for [file in files] file using  1:($4 > 0 ? $3 : 1/0) with lines, \
 #for [file in files] file using 1:4 with lines
-splot last_file using 1:2:($5 < 0 ? $3 : 1/0) with pm3d notitle,last_file using  1:2:($5 > 0 ? $4 : 1/0) with pm3d notitle, \
+splot file using 1:2:($5 < 0 ? $3 : 1/0) with pm3d notitle, file using  1:2:($5 > 0 ? $4 : 1/0) with pm3d notitle, \
 #exact_file with lines, \
 #last_file using 1:4 with lines
 pause -1 "Press Enter to exit"
