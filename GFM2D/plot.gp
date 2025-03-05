@@ -12,7 +12,8 @@ unset key
 set style line 1 lt 1 lw 2  # Regular line (solid)
 set style line 2 lt 2 lw 2 dashtype 2   # Dotted line (lt 2 is the line type for dotted)
 #set yrange [0:1.5]
-
+#set size 1.625,0.45
+#set origin -0.25,0.25
 #plot for [file in files] file using 1:($4 < 0 ? $2 : 1/0) with lines,for [file in files] file using  1:($4 > 0 ? $3 : 1/0) with lines, \
 #for [file in files] file using 1:4 with lines
 splot file using 1:2:($5 < 0 ? $3 : 1/0) with pm3d notitle, file using  1:2:($5 > 0 ? $4 : 1/0) with pm3d notitle, \

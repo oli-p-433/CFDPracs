@@ -35,6 +35,9 @@ class solver{
         void FORCE();
         void SLIC();
         void MUSCL();
+        void exactGodunov();
+        void HLLCGodunov();
+        std::array<double,3> HLLC(std::array<double,3>,std::array<double,3>, EOS*);
         std::array<double,3> laxFhalf(const std::array<double,3>, const std::array<double,3>, EOS* eos)const;
         std::array<double,3> LF(const std::array<double,3>, const std::array<double,3>, EOS* eos)const;
         void pointsUpdate();

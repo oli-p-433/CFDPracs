@@ -10,5 +10,5 @@ fi
 t
 EOF
 
-rm -r /mnt/c/Users/olive/MPhilData/t 
-cp -r t /mnt/c/Users/olive/MPhilData
+#rm -r /mnt/c/Users/olive/MPhilData/t 
+#cp -r t /mnt/c/Users/olive/MPhilData

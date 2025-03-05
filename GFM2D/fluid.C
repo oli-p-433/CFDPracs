@@ -1,26 +1,26 @@
 #include "fluid.H" 
 
-fluid::fluid(int n_Cells, int n_Ghosts)
-    : nCells(n_Cells), nGhost(n_Ghosts) {
+fluid::fluid(int n_CellsX, int n_CellsY, int n_Ghosts)
+    : nCellsX(n_CellsX), nCellsY(n_CellsY), nGhost(n_Ghosts) {
 
-    resizef2D(nCells + 2 * nGhost, nCells + 2 * nGhost, u);
-    resizef2D(nCells + 2 * nGhost, nCells + 2 * nGhost, uPlus1);
-    resizef2D(nCells + 2 * nGhost, nCells + 2 * nGhost, nDotGradPhi);
-    resizef2D(nCells + 2, nCells + 1, fluxesX);
-    resizef2D(nCells + 1, nCells + 2, fluxesY);
-    resizef2D(nCells + 2, nCells + 3, halfSlopesX);
-    resizef2D(nCells + 3, nCells + 2, halfSlopesY);
-    resizef2D(nCells + 2, nCells + 2, rX);
-    resizef2D(nCells + 2, nCells + 2, rY);
-    resizef2D(nCells + 2, nCells + 2, uBarLX);
-    resizef2D(nCells + 2, nCells + 2, uBarLY);
-    resizef2D(nCells + 2, nCells + 2, uBarRX);
-    resizef2D(nCells + 2, nCells + 2, uBarRY);
-    resizef2D(nCells + 2, nCells + 2, uBarLupdX);
-    resizef2D(nCells + 2, nCells + 2, uBarLupdY);
-    resizef2D(nCells + 2, nCells + 2, uBarRupdX);
-    resizef2D(nCells + 2, nCells + 2, uBarRupdY);
-    resizef2D(nCells, nCells, sourceResult);
+    resizef2D(nCellsY + 2 * nGhost, nCellsX + 2 * nGhost, u);
+    resizef2D(nCellsY + 2 * nGhost, nCellsX + 2 * nGhost, uPlus1);
+    resizef2D(nCellsY + 2 * nGhost, nCellsX + 2 * nGhost, nDotGradPhi);
+    resizef2D(nCellsY, nCellsX + 1, fluxesX);
+    resizef2D(nCellsY + 1, nCellsX, fluxesY);
+    resizef2D(nCellsY + 2, nCellsX + 3, halfSlopesX);
+    resizef2D(nCellsY + 3, nCellsX + 2, halfSlopesY);
+    resizef2D(nCellsY + 2, nCellsX + 2, rX);
+    resizef2D(nCellsY + 2, nCellsX + 2, rY);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarLX);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarLY);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarRX);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarRY);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarLupdX);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarLupdY);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarRupdX);
+    resizef2D(nCellsY + 2, nCellsX + 2, uBarRupdY);
+    resizef2D(nCellsY, nCellsX, sourceResult);
 
 
 }

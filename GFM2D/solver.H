@@ -21,29 +21,22 @@ class solver{
         void phiInit(std::vector< std::vector < double > >);
 
         // GFM
-        std::vector< std::array< int,2 > > interfaceCells;
         void findBoundary();
-        std::vector < std::array<double,2> > interfaceNormals;
-        void calcPhiGrads();
-        std::vector < std::array < std::array<double,2>,2 > > interfacePositions;
-        void calcInterface();
-        std::vector <  std::array< std::array<double,4>,2 > > interfaceStates;
-        void interpInterfaceStates();
-        std::array<double,4> bilinear(double,double,fluid&);
-        void interfaceRiem();
-        std::vector < std::array<double,4> > riemInterfaceStates;
-        void resolveVelocities();
-        std::vector < std::array < std::array<double,2>,2> > resolvedVelocities;
-        void calcStarStates();
-        std::vector < std::array < std::array<double,4>,2> > starStates;
-        void calcPhiNormals();
+        void calcInterfaceNormals(fluid&);
+        void calcInterface(fluid&);
+        void interpInterfaceStates(fluid&);
+        std::array<double,4> bilinear(double,double,fluid&,std::array<double,2>);
+        void interfaceRiem(fluid&);
+        void resolveVelocities(fluid&);
+        void calcStarStates(fluid&);
+        void calcPhiGrad();
         std::vector < std::vector < std::array<double,2 > > > phiNormals;
         void calcnDotPhiNormals();
-        std::vector < std::vector < std::array < double,4 > > > uExtrap;
-        std::vector < std::vector < std::array < double,4 > > > nDotGradPhi;
         void setInterface();
         void setGhostFluids();
+        void fastSweeping(fluid&);
         void eikonalDt();
+        void dtExtrap();
         double extrapDt;
 
 
@@ -60,7 +53,9 @@ class solver{
         void godunov(fluid&, EOS*);
 
         std::function<void(fluid&, EOS*)> fluxMethod;
-
+        std::function<std::array<double,4>(std::array<double,4>,std::array<double,4>, EOS*)> fluxRiemannSolver;
+        
+        std::array<double,4> HLL(std::array<double,4>,std::array<double,4>, EOS*);
         std::array<double,4> HLLC(std::array<double,4>,std::array<double,4>, EOS*);
         
 
@@ -78,7 +73,7 @@ class solver{
         void run();
         double calcSoundSpeed(std::array<double,4>);
 
-        std::array<double,4> riemannSolver(std::array<double,4>,std::array<double,4>, EOS*);
+        std::array<double,4> exactRiemann(std::array<double,4>,std::array<double,4>, EOS*);
 
         // slope limiting
         void calcHalfSlopes(fluid&);
@@ -97,6 +92,9 @@ class solver{
         void transmissiveBC(fluid&);
         void cylTransmissiveBC(fluid&);
         void phiBC();
+        void scalarTransBC(std::vector< std::vector < double >>&);
+        template <size_t N>
+        void vectorTransBC(std::vector< std::vector < std::array<double,N> > >&);
 
         std::function<std::array<double,4>(std::array<double,4>,EOS*)> flux;
 
@@ -119,12 +117,13 @@ class solver{
         std::map<std::string,int> varMap;
         // constructor
 
-        solver(double,double,double,double,double,double,int,int,double,double);
+        solver(double,double,double,double,double,double,int,int,int,double,double);
 
         // utility functions
 
         static void printPrec(double,int);
         static void print_arr(std::vector < std::vector< std::array<double,4> > >, int);
+        void print_var(int);
         static void print_vect(std::vector < std::array<double,4> >);
         static void print_state(std::array<double,4>);
         static std::array<double,4> set_vals(double,double,double,double);
@@ -151,7 +150,9 @@ class solver{
 
         double dx;
         double dy;
-        int nCells;
+        int nCellsX;
+        int nCellsY;
+
         int nGhost;
         double cSound;
 
@@ -189,17 +190,23 @@ class solver{
         const double gamma;
 };
 
-std::array<double, 4> operator-(const std::array<double, 4>&, const std::array<double, 4>&);
+template<size_t N>
+std::array<double, N> operator-(const std::array<double, N>&, const std::array<double, N>&);
 
-std::array<double, 4> operator+(const std::array<double, 4>&, const std::array<double, 4>&);
+template<size_t N>
+std::array<double, N> operator+(const std::array<double, N>&, const std::array<double, N>&);
 
-std::array<double, 4> operator*(const double,const std::array<double, 4>&);
+template<size_t N>
+std::array<double, N> operator*(const double,const std::array<double, N>&);
 
-std::array<double, 4> operator*(const std::array<double, 4>&,const std::array<double, 4>&);
+template<size_t N>
+std::array<double, N> operator*(const std::array<double, N>&,const std::array<double, N>&);
 
-std::array<double, 4> operator/(const std::array<double, 4>&, const double);
+template<size_t N>
+std::array<double, N> operator/(const std::array<double, N>&, const double);
 
-std::array<double, 4> elementDivide(const std::array<double, 4>&, const std::array<double, 4>&);
+template<size_t N>
+std::array<double, N> elementDivide(const std::array<double, N>&, const std::array<double, N>&);
 
 
 inline void resize2D(int szY, int szX, std::vector < std::vector < std::array<double,4> > >& arr){

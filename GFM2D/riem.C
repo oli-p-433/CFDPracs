@@ -146,7 +146,9 @@ std::array<double,4> riemann::exctRiemann(){ // states will be in primitive vari
     leftStar = solveRiem(pStar, state1, 1);
     rightStar = solveRiem(pStar, state2, 0);
 
-    //fine up to here
+    //std::cout << leftStar[0] << " " << leftStar[1] << " " << leftStar[2] << " " << leftStar[3] << std::endl;
+    //std::cout << rightStar[0] << " " << rightStar[1] << " " << rightStar[2] << " " << rightStar[3] << std::endl;
+
 
     if (leftStar[3] > 0 || state1[1]-calcSoundSpeed(state1,1) > 0){ // right moving left shock or u_L - cs_L > 0
         return state1orig;

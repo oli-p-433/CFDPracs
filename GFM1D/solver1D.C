@@ -30,7 +30,8 @@ void solver::run(){
         this->phiUpdate();
 
         //this->SLIC();
-        this->MUSCL();
+        //this->MUSCL();
+        this->HLLCGodunov();
         this->pointsUpdate();
         std::cout << "points updated" << std::endl;
 
@@ -86,6 +87,95 @@ void solver::MUSCL(){
 
         riemann solution2(eos[1]->get_gamma(),eos[1]->get_gamma(),eos[1]->consvToPrim(u2BarRupd[i]),eos[1]->consvToPrim(u2BarLupd[i+1]),0,1,0,1,2,0,0); // need p_inf setup
         fluxes2[i] = flux(solution2.exctRiemann(),eos[1]);
+    }
+}
+
+void solver::exactGodunov(){
+
+    for (size_t i=0; i < fluxes1.size(); ++i){
+        riemann solution1(eos[0]->get_gamma(),eos[0]->get_gamma(),eos[0]->consvToPrim(u1[i+nGhost-1]),eos[0]->consvToPrim(u1[i+nGhost]),0,1,0,1,2,0,0); // need p_inf setup
+        fluxes1[i] = flux(solution1.exctRiemann(),eos[0]);
+
+        riemann solution2(eos[1]->get_gamma(),eos[1]->get_gamma(),eos[1]->consvToPrim(u2[i+nGhost-1]),eos[1]->consvToPrim(u2[i+nGhost]),0,1,0,1,2,0,0); // need p_inf setup
+        fluxes2[i] = flux(solution2.exctRiemann(),eos[1]);
+    }
+}
+
+void solver::HLLCGodunov(){
+
+    for (size_t i=0; i < fluxes1.size(); ++i){
+        riemann solution1(eos[0]->get_gamma(),eos[0]->get_gamma(),eos[0]->consvToPrim(u1[i+nGhost-1]),eos[0]->consvToPrim(u1[i+nGhost]),0,1,0,1,2,0,0); // need p_inf setup
+        fluxes1[i] = flux(solution1.exctRiemann(),eos[0]);
+
+        riemann solution2(eos[1]->get_gamma(),eos[1]->get_gamma(),eos[1]->consvToPrim(u2[i+nGhost-1]),eos[1]->consvToPrim(u2[i+nGhost]),0,1,0,1,2,0,0); // need p_inf setup
+        fluxes2[i] = flux(solution2.exctRiemann(),eos[1]);
+    }
+}
+
+std::array<double,3> solver::HLLC(std::array<double,3> left,std::array<double,3> right, EOS* eos){ // takes conserved variables
+    std::array<double,3> HLLCFlux;
+    double SL = 0.0, SR = 0.0;
+    std::array<double,3> LPrim = eos->consvToPrim(left);
+    std::array<double,3> RPrim = eos->consvToPrim(right);
+
+    // Pressure - based wavespeed estimation
+    /*
+    double pEst = 0.5*(LPrim[PRES]+RPrim[PRES])-0.5*(RPrim[dir]-LPrim[dir])*0.25*(LPrim[RHO]+RPrim[RHO])*(eos->calcSoundSpeed(LPrim)+eos->calcSoundSpeed(RPrim));
+    double qL,qR;
+    
+    qL = (pEst < LPrim[PRES]) ? 1 : sqrt(1+((eos->get_gamma()+1)/(2.0*eos->get_gamma()))*((pEst/LPrim[PRES])-1));
+    qR = (pEst < RPrim[PRES]) ? 1 : sqrt(1+((eos->get_gamma()+1)/(2.0*eos->get_gamma()))*((pEst/RPrim[PRES])-1));
+
+    SL = LPrim[dir] - eos->calcSoundSpeed(LPrim)*qL;
+    SR = RPrim[dir] + eos->calcSoundSpeed(RPrim)*qR;
+    */
+
+    // easy wavespeed (doesnt work)
+    SL = std::min(LPrim[1] - eos->calcSoundSpeed(LPrim), RPrim[1] - eos->calcSoundSpeed(RPrim));
+    SR = std::max(LPrim[1] + eos->calcSoundSpeed(LPrim), RPrim[1] + eos->calcSoundSpeed(RPrim));
+
+    if ((std::isnan(SL) == 1) || (std::isnan(SR) == 1)){
+        std::cout << "SL SR " << SL << " " << SR << std::endl;
+    }
+
+    // Calculate the numerator of sStar
+    double numerator = RPrim[2] - LPrim[2] + LPrim[0] * LPrim[1] * (SL - LPrim[1]) - RPrim[0] * RPrim[1] * (SR - RPrim[1]);
+    
+    // Calculate the denominator of sStar
+    double denominator = LPrim[0] * (SL - LPrim[1]) - RPrim[0] * (SR - RPrim[1]);
+    
+    // Calculate sStar
+    double sStar = numerator / denominator;
+                    (LPrim[0]*(SL-LPrim[1]) - RPrim[0]*(SR-RPrim[1]));
+    if (std::isnan(sStar) == 1){
+
+        std::cout << "numerator " <<  (RPrim[2]-LPrim[2]+LPrim[0]*LPrim[1]*(SL-LPrim[1])-RPrim[0]*RPrim[1]*(SR-RPrim[1])) << std::endl;
+        std::cout << "denominator " << (LPrim[0]*(SL-LPrim[1]) - RPrim[0]*(SR-RPrim[1])) << std::endl; 
+        throw std::runtime_error("sStar is nan");
+    }
+
+    // calculating u_HLLC
+    std::array<double,3> Dstar;
+    Dstar = {0, 1, sStar};
+
+
+    double SdiffL{SL - sStar},SdiffR{SR - sStar};
+    if (std::abs(SdiffL) < 1e-8) SdiffL = (SL < 0) ? -1e-8 : 1e-8;
+    if (std::abs(SdiffR) < 1e-8) SdiffR = (SR < 0) ? -1e-8 : 1e-8;
+
+    std::array<double,3> FhllcLeft = (sStar*(SL*LPrim-flux(LPrim,eos))+SL*(LPrim[2]+LPrim[0]*(SL-LPrim[1])*(sStar-LPrim[1]))*Dstar)/(SdiffL);
+    std::array<double,3> FhllcRight = (sStar*(SR*RPrim-flux(RPrim,eos))+SR*(RPrim[2]+RPrim[0]*(SR-RPrim[1])*(sStar-RPrim[1]))*Dstar)/(SdiffR);
+
+    if (0 <= SL){
+        return flux(LPrim,eos);
+    } else if (SL < 0 && 0 <= sStar){
+        return FhllcLeft;
+    } else if (sStar < 0 && 0 <= SR){
+        return FhllcRight;
+    } else if (SR < 0){
+        return flux(RPrim,eos);
+    } else {
+        throw std::runtime_error("wavespeed condition invalid");
     }
 }
 
