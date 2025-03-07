@@ -10,6 +10,7 @@ class riemann{
         double calcSoundSpeed(std::array<double,3>,bool);
 
         std::array<double,4> exctRiemann();
+        std::array<double,4> interfaceRiemann(bool);
         double fRiemann(double pStar);
         double fShock(double, std::array<double,3>, bool);
         double fRare(double, std::array<double,3>, bool);

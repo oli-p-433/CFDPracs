@@ -196,6 +196,35 @@ std::array<double,4> riemann::exctRiemann(){ // states will be in primitive vari
 
 }
 
+std::array<double,4> riemann::interfaceRiemann(bool left){ // states will be in primitive variable form by default
+
+    double pStar = 0.5*(state1[2]+state2[2]);
+    double pOld = pStar;
+    double epsilon = 1e-8;
+    int cnt = 0;
+    do {
+        cnt++;
+        pOld = std::max(1e-8,pStar);
+        //std::cout << fRiemann(pOld) << " " << fPrm(pOld, state1,1)+fPrm(pOld,state2,0) << std::endl;
+        pStar = pOld - (fRiemann(pOld)/(fPrm(pOld, state1,1)+fPrm(pOld,state2,0)));
+        //std::cout << "iteration " << cnt << ", p* = " << pStar << ", pOld = " << pOld << std::endl;
+
+    } while (std::fabs(pStar-pOld)/pOld > epsilon);
+
+    //std::cout << "converged, p* = " << pStar << std::endl; 
+
+    std::array<double,4> leftStar = {0,0,0,0};
+    std::array<double,4> rightStar = {0,0,0,0};
+
+    leftStar = solveRiem(pStar, state1, 1);
+    rightStar = solveRiem(pStar, state2, 0);
+
+    //std::cout << leftStar[0] << " " << leftStar[1] << " " << leftStar[2] << " " << leftStar[3] << std::endl;
+    //std::cout << rightStar[0] << " " << rightStar[1] << " " << rightStar[2] << " " << rightStar[3] << std::endl;
+    std::array<double,4> result = left ? std::array<double,4>{leftStar[0],leftStar[1],state1orig[2],leftStar[2]} : std::array<double,4>{rightStar[0],rightStar[1],state2orig[2],rightStar[2]};
+    return result;
+}
+
 std::array<std::string,5> riemann::waveSignature(double pStar){
     std::array<std::string,5> result;
     if (pStar > state1[2] && pStar > state2[2]){

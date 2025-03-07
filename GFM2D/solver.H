@@ -34,7 +34,14 @@ class solver{
         void calcnDotPhiNormals();
         void setInterface();
         void setGhostFluids();
-        void fastSweeping(fluid&);
+        std::array<double,4> solveQ(bool,bool,std::array<double,4>,std::array<double,4>,double);
+        void solveSweepPoint(int,int);
+        void solveSweepPoint2(int,int,bool,bool);
+        void GFFastSweeping();
+        void GFFastSweeping2();
+        void fastSweepExtrapolation(std::vector<std::vector<std::array<double, 4>>>& grid,
+            std::vector<std::array<int, 2>>& interfaceCells,std::vector<std::vector<double>>& phi,
+            fluid& f, int numSweeps);
         void eikonalDt();
         void dtExtrap();
         double extrapDt;
@@ -57,6 +64,7 @@ class solver{
         
         std::array<double,4> HLL(std::array<double,4>,std::array<double,4>, EOS*);
         std::array<double,4> HLLC(std::array<double,4>,std::array<double,4>, EOS*);
+        std::array<std::array<double,4>,2> HLLCStates(std::array<double,4>,std::array<double,4>, EOS*);
         
 
         std::array<double,4> laxFhalf(const std::array<double,4>, const std::array<double,4>, EOS*)const;
@@ -64,7 +72,10 @@ class solver{
         void pointsUpdate(fluid&);
         void phiUpdate(int);
 
-        void reinitPhi();
+        void initialisePhi();
+        void reinitPhiFastSweeping(int);
+        void reinitPhiIterative();
+        void solveEikonalPoint(int,int);
 
         void neighbourAvg(fluid& f, int, int);
         void fixFreshlyCleared();
@@ -131,7 +142,7 @@ class solver{
         static void resize2Db(int,int,std::vector < std::vector < std::array<double,2> >>&);
         static void resize2Dc(int,int,std::vector < std::vector < std::array<double,4> >>&);
         static void printScalarField(const std::vector < std::vector < double > >&);
-        void printInterfaceArray(std::vector<std::vector<double>>, std::vector<std::array<int, 2>>&, const std::string&);
+        void printInterfaceArrays(std::vector<std::vector<double>>, fluid&, const std::string&);
 
         // Source term modelling
 
