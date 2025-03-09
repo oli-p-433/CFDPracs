@@ -13,8 +13,8 @@
 void solver::run(){
     //std::cout << "pre-bc" << std::endl;
 
-    transmissiveBC(fluid1);
-    transmissiveBC(fluid2);
+    setBCs(fluid1);
+    setBCs(fluid2);
     phiBC();
     //this->findBoundary();
     //this->initialisePhi();
@@ -105,7 +105,7 @@ void solver::run(){
         
         
         splitFlip++;
-        std::cout << "Flux calc & point updates" << std::endl;
+        //std::cout << "Flux calc & point updates" << std::endl;
         if (splitFlip%2 == 0){
             //std::cout << "x first" << std::endl;
             direction = XDIR;
@@ -114,8 +114,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
-            transmissiveBC(fluid1);
-            transmissiveBC(fluid2);
+            setBCs(fluid1);
+            setBCs(fluid2);
             //std::cout << "u1" << std::endl;
             //print_arr(fluid1.u,UY);
             direction = YDIR;
@@ -124,8 +124,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
-            transmissiveBC(fluid1);
-            transmissiveBC(fluid2);
+            setBCs(fluid1);
+            setBCs(fluid2);
             
             direction = XDIR;
             dt = origDt/2.0;
@@ -133,8 +133,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
-            transmissiveBC(fluid1);
-            transmissiveBC(fluid2);
+            setBCs(fluid1);
+            setBCs(fluid2);
 
             //std::cout << "u1" << std::endl;
             //print_arr(fluid1.u,UY);
@@ -146,8 +146,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
-            transmissiveBC(fluid1);
-            transmissiveBC(fluid2);
+            setBCs(fluid1);
+            setBCs(fluid2);
             //std::cout << "u1" << std::endl;
             //print_arr(fluid1.u,UY);
             direction = XDIR;
@@ -156,8 +156,8 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
-            transmissiveBC(fluid1);
-            transmissiveBC(fluid2);
+            setBCs(fluid1);
+            setBCs(fluid2);
             
             direction = YDIR;
             dt = origDt/2.0;
@@ -165,21 +165,21 @@ void solver::run(){
             this->pointsUpdate(fluid1);
             this->fluxMethod(fluid2,eos[1]);
             this->pointsUpdate(fluid2);
-            transmissiveBC(fluid1);
-            transmissiveBC(fluid2);
+            setBCs(fluid1);
+            setBCs(fluid2);
         }
         //std::cout << "points updated" << std::endl;
 
-        transmissiveBC(fluid1);
-        transmissiveBC(fluid2);
+        setBCs(fluid1);
+        setBCs(fluid2);
         //setInterface();
 
         this->fluid1.interfaceCells={};
         this->fluid2.interfaceCells={};
         this->freshlyCleared={};
 
-        transmissiveBC(fluid1);
-        transmissiveBC(fluid2);
+        setBCs(fluid1);
+        setBCs(fluid2);
 
         //time = 6+((splitFlip-1)*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
@@ -667,8 +667,8 @@ void solver::setInterface(){ // ind = 0 for fluid1, 1 for fluid2
     for (size_t i = 0; i<fluid2.starStates.size(); ++i){
         fluid2.u[fluid2.interfaceCells[i][0]][fluid2.interfaceCells[i][1]] = eos[1]->primToConsv(fluid2.starStates[i]); // interface states set to u*R
     }
-    transmissiveBC(fluid1);
-    transmissiveBC(fluid2);
+    setBCs(fluid1);
+    setBCs(fluid2);
     /*
     for (size_t i = 0; i<fluid1.starStates.size(); ++i){
         fluid2.u[fluid1.interfaceCells[i][0]][fluid1.interfaceCells[i][1]] = eos[1]->primToConsv(fluid2.starStates[i][1]); // interface states set to u*R
@@ -825,7 +825,7 @@ void solver::GFFastSweeping(){
             }
         }
 
-        transmissiveBC(fluid1);
+        setBCs(fluid1);
         transmissiveBC(fluid2);
         
     }
@@ -914,60 +914,8 @@ void solver::solveEikonalPoint(int i, int j){
         }
 
         //std::cout << trialResult << std::endl;
-        phi[i][j] = (std::abs(trialResult) < std::abs(phi[i][j])) ? trialResult : phi[i][j];
-        //phi[i][j] = trialResult;
-    }
-}
-
-void solver::solveSweepPoint2(int i, int j, bool xfwd, bool yfwd){
-    std::array<double,4> Qx, Qy;
-    if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
-        && std::signbit(phi[i][j]) == std::signbit(phi[i+1][j]) && std::signbit(phi[i][j]) == std::signbit(phi[i-1][j])){
-            
-            double alpha = (dx/dy)*phiNormals[i][j][1]/(phiNormals[i][j][0]);
-            if (std::isnan(alpha) == 1){
-                alpha = dx/dy;
-            } else if (std::isinf(alpha) == 1){
-                alpha = 1e15;
-            } else if (alpha == 0){
-                alpha = 1e-15;
-            }
-            //std::cout << alpha << std::endl;
-
-            if (phi[i][j] <= 0){
-                Qx = xfwd ? fluid2.u[i][j+1] : fluid2.u[i][j-1];
-                Qy = yfwd ? fluid2.u[i+1][j] : fluid2.u[i-1][j];
-                fluid2.u[i][j] = solveQ(xfwd,yfwd,Qx,Qy,alpha);
-            } else {
-                Qx = xfwd ? fluid1.u[i][j-1] : fluid1.u[i][j+1];
-                Qy = yfwd ? fluid1.u[i-1][j] : fluid1.u[i+1][j];
-                fluid1.u[i][j] = solveQ(xfwd,yfwd,Qx,Qy,alpha);
-            }
-        }
-}
-
-void solver::GFFastSweeping2(){
-    double maxIter = (splitFlip == 0) ? 20 : 2;
-    calcPhiGrad();
-    setInterface();
-    std::cout << "phi normals calculated" << std::endl;
-    for (int iter = 0; iter < maxIter; ++iter){
-
-        for (int i = nGhost; i < fluid1.u.size()-nGhost; ++i){
-            for (int j = nGhost; j < fluid1.u[0].size()-nGhost; ++j){
-                solveSweepPoint2(i,j,1,1);
-            }
-        }
-
-        for (int i = fluid1.u.size()-1-nGhost; i >= nGhost; --i){
-            for (int j = fluid1.u[0].size()-1-nGhost; j >= nGhost; --j){
-                solveSweepPoint2(i,j,0,0);
-            }
-        }
-
-        transmissiveBC(fluid1);
-        transmissiveBC(fluid2);
-        
+        phi[i][j] = (std::abs(trialResult) < std::abs(phi[i][j])) ? trialResult : phi[i][j]; // "reinit 2"
+        //phi[i][j] = trialResult; // "reinit 1"
     }
 }
 
@@ -1486,6 +1434,104 @@ void solver::transmissiveBC(fluid& fluid){
     }
 }
 
+void solver::reflectiveBC(fluid& fluid) {
+    // Bottom boundary ghost cells (rows 0..nGhost-1, excluding corners)
+    for (int i = 0; i < nGhost; ++i) {
+        for (size_t j = nGhost; j < nCellsX+nGhost; ++j) {
+            // Copy from the first interior row (row nGhost)
+            fluid.u[i][j] = fluid.u[nGhost][j];
+            fluid.uPlus1[i][j] = fluid.u[nGhost][j];
+            // Flip the vertical (y) momentum (index 2)
+            fluid.u[i][j][2] = -fluid.u[nGhost][j][2];
+            fluid.uPlus1[i][j][2] = -fluid.u[nGhost][j][2];
+        }
+    }
+
+    // Top boundary ghost cells (rows nCellsY+nGhost .. nCellsY+2*nGhost-1, excluding corners)
+    for (int i = nCellsY+nGhost; i < nCellsY+2*nGhost; ++i) {
+        for (size_t j = nGhost; j < nCellsX+nGhost; ++j) {
+            // Copy from the last interior row (row nCellsY+nGhost-1)
+            fluid.u[i][j] = fluid.u[nCellsY+nGhost-1][j];
+            fluid.uPlus1[i][j] = fluid.u[nCellsY+nGhost-1][j];
+            // Flip the vertical (y) momentum
+            fluid.u[i][j][2] = -fluid.u[nCellsY+nGhost-1][j][2];
+            fluid.uPlus1[i][j][2] = -fluid.u[nCellsY+nGhost-1][j][2];
+        }
+    }
+
+    // Left boundary ghost cells (columns 0..nGhost-1, excluding corners)
+    for (size_t i = nGhost; i < nCellsY+nGhost; ++i) {
+        for (int j = 0; j < nGhost; ++j) {
+            // Copy from the first interior column (column nGhost)
+            fluid.u[i][j] = fluid.u[i][nGhost];
+            fluid.uPlus1[i][j] = fluid.u[i][nGhost];
+            // Flip the horizontal (x) momentum (index 1)
+            fluid.u[i][j][1] = -fluid.u[i][nGhost][1];
+            fluid.uPlus1[i][j][1] = -fluid.u[i][nGhost][1];
+        }
+    }
+
+    // Right boundary ghost cells (columns nCellsX+nGhost .. nCellsX+2*nGhost-1, excluding corners)
+    for (size_t i = nGhost; i < nCellsY+nGhost; ++i) {
+        for (int j = nCellsX+nGhost; j < nCellsX+2*nGhost; ++j) {
+            // Copy from the last interior column (column nCellsX+nGhost-1)
+            fluid.u[i][j] = fluid.u[i][nCellsX+nGhost-1];
+            fluid.uPlus1[i][j] = fluid.u[i][nCellsX+nGhost-1];
+            // Flip the horizontal (x) momentum
+            fluid.u[i][j][1] = -fluid.u[i][nCellsX+nGhost-1][1];
+            fluid.uPlus1[i][j][1] = -fluid.u[i][nCellsX+nGhost-1][1];
+        }
+    }
+
+    // Now handle the four corner regions.
+    // Bottom-left corner:
+    for (int i = 0; i < nGhost; ++i) {
+        for (int j = 0; j < nGhost; ++j) {
+            // Use the interior cell at (nGhost, nGhost)
+            fluid.u[i][j] = fluid.u[nGhost][nGhost];
+            fluid.uPlus1[i][j] = fluid.u[nGhost][nGhost];
+            // Flip both x and y momentum components
+            fluid.u[i][j][1] = -fluid.u[nGhost][nGhost][1];
+            fluid.u[i][j][2] = -fluid.u[nGhost][nGhost][2];
+            fluid.uPlus1[i][j][1] = -fluid.u[nGhost][nGhost][1];
+            fluid.uPlus1[i][j][2] = -fluid.u[nGhost][nGhost][2];
+        }
+    }
+    // Bottom-right corner:
+    for (int i = 0; i < nGhost; ++i) {
+        for (int j = nCellsX+nGhost; j < nCellsX+2*nGhost; ++j) {
+            fluid.u[i][j] = fluid.u[nGhost][nCellsX+nGhost-1];
+            fluid.uPlus1[i][j] = fluid.u[nGhost][nCellsX+nGhost-1];
+            fluid.u[i][j][1] = -fluid.u[nGhost][nCellsX+nGhost-1][1];
+            fluid.u[i][j][2] = -fluid.u[nGhost][nCellsX+nGhost-1][2];
+            fluid.uPlus1[i][j][1] = -fluid.u[nGhost][nCellsX+nGhost-1][1];
+            fluid.uPlus1[i][j][2] = -fluid.u[nGhost][nCellsX+nGhost-1][2];
+        }
+    }
+    // Top-left corner:
+    for (int i = nCellsY+nGhost; i < nCellsY+2*nGhost; ++i) {
+        for (int j = 0; j < nGhost; ++j) {
+            fluid.u[i][j] = fluid.u[nCellsY+nGhost-1][nGhost];
+            fluid.uPlus1[i][j] = fluid.u[nCellsY+nGhost-1][nGhost];
+            fluid.u[i][j][1] = -fluid.u[nCellsY+nGhost-1][nGhost][1];
+            fluid.u[i][j][2] = -fluid.u[nCellsY+nGhost-1][nGhost][2];
+            fluid.uPlus1[i][j][1] = -fluid.u[nCellsY+nGhost-1][nGhost][1];
+            fluid.uPlus1[i][j][2] = -fluid.u[nCellsY+nGhost-1][nGhost][2];
+        }
+    }
+    // Top-right corner:
+    for (int i = nCellsY+nGhost; i < nCellsY+2*nGhost; ++i) {
+        for (int j = nCellsX+nGhost; j < nCellsX+2*nGhost; ++j) {
+            fluid.u[i][j] = fluid.u[nCellsY+nGhost-1][nCellsX+nGhost-1];
+            fluid.uPlus1[i][j] = fluid.u[nCellsY+nGhost-1][nCellsX+nGhost-1];
+            fluid.u[i][j][1] = -fluid.u[nCellsY+nGhost-1][nCellsX+nGhost-1][1];
+            fluid.u[i][j][2] = -fluid.u[nCellsY+nGhost-1][nCellsX+nGhost-1][2];
+            fluid.uPlus1[i][j][1] = -fluid.u[nCellsY+nGhost-1][nCellsX+nGhost-1][1];
+            fluid.uPlus1[i][j][2] = -fluid.u[nCellsY+nGhost-1][nCellsX+nGhost-1][2];
+        }
+    }
+}
+
 void solver::cylTransmissiveBC(fluid& fluid){
     for (int var =0; var<4;++var){
         if (var == 0 || var == 2 || var == 3){
@@ -1765,8 +1811,11 @@ void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y ; p
     if (direction == XDIR){
         for (std::vector<double>::size_type i = nGhost ; i < fluid.u.size()-nGhost; ++i){
             for (std::vector<double>::size_type j = nGhost; j < fluid.u[0].size() - nGhost; ++j) {
-                fluid.uPlus1[i][j] = fluid.u[i][j] - (dt / dx) * (fluid.fluxesX[i-nGhost][j-nGhost+1] - fluid.fluxesX[i-nGhost][j-nGhost]); // flux[i + 1] and flux[i] for the update
-
+                if (std::signbit(phi[i][j]) == std::signbit(fl1)){
+                    fluid.uPlus1[i][j] = fluid.u[i][j] - (dt / dx) * (fluid.fluxesX[i-nGhost][j-nGhost+1] - fluid.fluxesX[i-nGhost][j-nGhost]); // flux[i + 1] and flux[i] for the update
+                } else {
+                    fluid.uPlus1[i][j] = fluid.u[i][j];
+                }
             }
         }
         fluid.u = fluid.uPlus1;
@@ -1774,7 +1823,11 @@ void solver::pointsUpdate(fluid& fluid){ //second index = x, first index = y ; p
     } else if (direction == YDIR){
         for (std::vector<double>::size_type i = nGhost; i < fluid.u.size()-nGhost; ++i){ // this is the part that causes vx to grow
             for (std::vector<double>::size_type j = nGhost; j < fluid.u[0].size() - nGhost; ++j) {
-                fluid.uPlus1[i][j] = fluid.u[i][j] - (dt / dy) * (fluid.fluxesY[i-nGhost+1][j-nGhost] - fluid.fluxesY[i-nGhost][j-nGhost]); // flux[i + 1] and flux[i] for the update
+                if (std::signbit(phi[i][j]) == std::signbit(fl1)){
+                    fluid.uPlus1[i][j] = fluid.u[i][j] - (dt / dy) * (fluid.fluxesY[i-nGhost+1][j-nGhost] - fluid.fluxesY[i-nGhost][j-nGhost]); // flux[i + 1] and flux[i] for the update
+                } else {
+                    fluid.uPlus1[i][j] = fluid.u[i][j];
+                }
             }
         }
 
@@ -2092,7 +2145,6 @@ std::array<double,4> solver::bilinear(double x, double y, fluid& fluid, std::arr
     int rows = nCellsY;
     int cols = nCellsX;
 
-
     // Compute indices of grid cell containing the point
     int j = ((x - x0) / dx) + nGhost - 0.5;
     int i = ((y - y0) / dy) + nGhost - 0.5;
@@ -2123,6 +2175,12 @@ std::array<double,4> solver::bilinear(double x, double y, fluid& fluid, std::arr
     }
 
     if (i == 0 || i == (2*nGhost+nCellsY) || j==0 || j == (2*nGhost+nCellsX)){
+        return fluid.u[i][j];
+    }
+    if (std::signbit(phi[i][j]) != std::signbit(phi[iR][j]) || std::signbit(phi[i][jR]) != std::signbit(phi[i][j])
+        || std::signbit(phi[iR][jR]) != std::signbit(phi[iR][j]) || std::signbit(phi[iR][jR]) != std::signbit(phi[i][jR])){
+        return fluid.u[i][j];
+    } else {
         return fluid.u[i][j];
     }
 
@@ -2214,7 +2272,11 @@ void solver::setDt(){
     //std::cout << "setting dt" << std::endl;
     for (std::vector<double>::size_type i = 0; i < fluid1.u.size(); ++i) {
         for (std::vector<double>::size_type j = 0; j < fluid1.u[0].size(); ++j) {
-            aMax = std::max(aMax, std::max(std::sqrt(pow(eos[1]->consvToPrim(fluid2.u[i][j])[UX],2)+pow(eos[1]->consvToPrim(fluid2.u[i][j])[UY],2))+eos[1]->calcSoundSpeed(eos[1]->consvToPrim(fluid2.u[i][j])), std::sqrt(pow(eos[0]->consvToPrim(fluid1.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(fluid1.u[i][j])[UY],2))+eos[0]->calcSoundSpeed(eos[0]->consvToPrim(fluid1.u[i][j]))));
+            if (phi[i][j] <= 0){
+                aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(fluid1.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(fluid1.u[i][j])[UY],2))+eos[0]->calcSoundSpeed(eos[0]->consvToPrim(fluid1.u[i][j])));
+            } else {
+                aMax = std::max(aMax, std::sqrt(pow(eos[1]->consvToPrim(fluid2.u[i][j])[UX],2)+pow(eos[1]->consvToPrim(fluid2.u[i][j])[UY],2))+eos[1]->calcSoundSpeed(eos[1]->consvToPrim(fluid2.u[i][j])));
+            }
         }
     }
     //if (time > 0.16){writeInterval = 0.001;}
@@ -2250,7 +2312,7 @@ void solver::setDt(){
 
 // ---------------------- Constructor ------------------------ //
 solver::solver(double x_0, double x_1, double y_0, double y_1, double t0, double t1, int n_CellsX, int n_CellsY, int n_Ghosts, double c, double g)
-    : fluid1(n_CellsX, n_CellsY, n_Ghosts), fluid2(n_CellsX, n_CellsY, n_Ghosts), gamma(g) {
+    : fluid1(n_CellsX, n_CellsY, n_Ghosts), fluid2(n_CellsX, n_CellsY, n_Ghosts), bound(n_CellsX, n_CellsY, n_Ghosts), gamma(g) {
     assert(t1>t0);
     assert(g > 0);
 
@@ -2295,6 +2357,10 @@ double solver::get_dy()const{
     return dy;
 };
 
+boundary& solver::get_boundary(){
+    return bound;
+};
+
 void solver::init(std::vector< std::vector< std::array<double,4> > > init, fluid& fluid) {
     assert(init.size() == fluid.u.size());
     fluid.u = init;
@@ -2323,7 +2389,7 @@ void solver::setWriteInterval(double wt){
 
 void solver::writeData(std::string varName) const{ // modify to write both fluids
         // making data file
-        std::string filename = dirName + "/" + varName + "/" + std::to_string(time).substr(0,4);
+        std::string filename = dirName + "/" + varName + "/" + std::to_string(time).substr(0,5);
         std::ofstream writeFile(filename);
         assert(writeFile.is_open());
         if (writeFile.is_open()){

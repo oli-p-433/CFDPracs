@@ -78,6 +78,8 @@
         "fvm1D.C": "cpp",
         "riemann.C": "cpp",
         "EOS.C": "cpp",
-        "operators.C": "cpp"
+        "operators.C": "cpp",
+        "*.ipp": "cpp",
+        "boundary.C": "cpp"
     }
 }

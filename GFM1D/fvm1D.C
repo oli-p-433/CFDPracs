@@ -14,14 +14,14 @@
 int main(){
     int nCells = 200;
     double x0{0}, x1{1};
-    double startTime = 0.0, endTime = 0.0012;
+    double startTime = 0.0, endTime = 0.15;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
 
     // construct EOS object and give to sovler
     //stiffenedGas stiffgas(7.15,3e8,0);
-    idealGas idgas1(1.4); idealGas idgas2(1.67);
+    idealGas idgas1(1.4); idealGas idgas2(1.4);
     std::array<EOS*,2> materials = {&idgas1,&idgas2};
     solver sim(x0,x1,startTime,endTime,nCells,2,cour);
     sim.setEOS(materials);
@@ -40,7 +40,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.0001);
+    sim.setWriteInterval(0.01);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,3> input, EOS* eos){
@@ -59,6 +59,7 @@ int main(){
     for (std::vector<double>::size_type i=sim.ghosts(); i<u1Init.size()-sim.ghosts();i++){
         double discPos = 0.5;
         double x = x0 + (i-sim.ghosts()+0.5)*sim.get_dx();
+        /*
         if (x <= 0.05){
             u1Init[i] = sim.eos[0]->primToConsv({1.3333,0.3535*sqrt(1e5),1.5e5});
             u2Init[i] = sim.eos[1]->primToConsv({1,0,1});
@@ -69,7 +70,17 @@ int main(){
             u1Init[i] = sim.eos[0]->primToConsv({1,0,1});
             u2Init[i] = sim.eos[1]->primToConsv({0.1379,0,1e5});
         }
+            */
+        if (x < discPos){
+            u1Init[i] = sim.eos[0]->primToConsv({1,-2,0.4});
+            u2Init[i] = sim.eos[1]->primToConsv({1,-2,0.4});
+        } else {
+            u1Init[i] = sim.eos[0]->primToConsv({1,2,0.4});
+            u2Init[i] = sim.eos[1]->primToConsv({1,2,0.4});
+        }
+        
         phiInit[i] = x-discPos;
+
     }
 
     for (std::size_t var = 0; var < variables.size(); ++var) {

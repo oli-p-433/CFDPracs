@@ -14,8 +14,8 @@
 
 
 int main(){
-    int nCellsX = 325; // 325
-    int nCellsY = 90; // 90
+    int nCellsX = 975; // 325
+    int nCellsY = 270; // 90
     int nGhost = 2;
     double x0{0}, x1{0.325}; // 0.325
     double y0{-0.045}, y1{0.045}; // 0.09
@@ -46,7 +46,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.01);
+    sim.setWriteInterval(0.001);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,4> input, EOS* eos){
@@ -58,11 +58,23 @@ int main(){
     }; // because fEuler isnt static
 
     sim.fluxMethod = [&sim](fluid& f, EOS* e) {
-        sim.godunov(f, e); // Change this to sim.SLIC or sim.godunov as needed
+        sim.MUSCL(f, e); // Change this to sim.SLIC or sim.godunov as needed
     };
 
     sim.fluxRiemannSolver = [&sim](std::array<double,4> left,std::array<double,4> right, EOS* eos) {
-        return sim.HLLC(left,right,eos); // Change this to sim.SLIC or sim.godunov as needed
+        return sim.HLLC(left,right,eos);
+    };
+
+    sim.setBCs = [&sim](fluid& f) {
+        sim.get_boundary().reflectiveTopBC(f);
+        sim.get_boundary().reflectiveBottomBC(f);
+        sim.get_boundary().transmissiveLeftBC(f);
+        sim.get_boundary().transmissiveRightBC(f);
+        // 1st bool: left/right reflective, 2nd bool: top/bottom reflective
+        sim.get_boundary().updateBottomLeftCorner(f,false,true);
+        sim.get_boundary().updateTopRightCorner(f,false,true);
+        sim.get_boundary().updateBottomRightCorner(f,false,true);
+        sim.get_boundary().updateTopLeftCorner(f,false,true);
     };
 
     std::vector< std::vector<std::array<double,4>>> uInit1, uInit2;

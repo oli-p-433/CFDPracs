@@ -4,7 +4,7 @@
 #include <map>
 #include "EOS.H"
 #include "riem.H"
-#include "fluid.H"
+#include "boundary.H"
 
 class solver{
     public:
@@ -36,9 +36,7 @@ class solver{
         void setGhostFluids();
         std::array<double,4> solveQ(bool,bool,std::array<double,4>,std::array<double,4>,double);
         void solveSweepPoint(int,int);
-        void solveSweepPoint2(int,int,bool,bool);
         void GFFastSweeping();
-        void GFFastSweeping2();
         void fastSweepExtrapolation(std::vector<std::vector<std::array<double, 4>>>& grid,
             std::vector<std::array<int, 2>>& interfaceCells,std::vector<std::vector<double>>& phi,
             fluid& f, int numSweeps);
@@ -101,11 +99,14 @@ class solver{
         //
 
         void transmissiveBC(fluid&);
+        void reflectiveBC(fluid&);
         void cylTransmissiveBC(fluid&);
         void phiBC();
         void scalarTransBC(std::vector< std::vector < double >>&);
         template <size_t N>
         void vectorTransBC(std::vector< std::vector < std::array<double,N> > >&);
+
+        std::function<void(fluid&)> setBCs;
 
         std::function<std::array<double,4>(std::array<double,4>,EOS*)> flux;
 
@@ -118,6 +119,7 @@ class solver{
         double get_dx()const;
         double get_dy()const;
         fluid& get_fluid(bool);
+        boundary& get_boundary();
 
 
         double dt;
@@ -167,7 +169,9 @@ class solver{
         int nGhost;
         double cSound;
 
-        fluid fluid1, fluid2; // Add these lines
+        fluid fluid1, fluid2;
+
+        boundary bound;
 
         // level set
         std::vector< std::vector < double > > phi;

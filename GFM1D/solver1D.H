@@ -11,6 +11,8 @@ class solver{
         std::vector< std::array<double,3> > u1Plus1;
         std::vector< std::array<double,3> > u2Plus1;
 
+        bool PRIM;
+
         // level set
         std::vector< double > phi;
         std::vector< double > phiPlus1;
