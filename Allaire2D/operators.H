@@ -192,4 +192,12 @@ void resizeVector(std::vector<std::vector<T>>& matrix, size_t rows, size_t cols)
     }
 }
 
+template<size_t N>
+void printState(std::array<double,N>& state) {
+    for (double val : state) {
+        std::cout << val << " ";
+    }
+    std::cout << std::endl;
+}
+
 #endif // OPERATORS_H

@@ -1,21 +1,21 @@
 #include "EOS.H"
-#include<cmath>
-#include<iostream>
-#include<cassert>
+#include <cmath>
+#include <iostream>
+#include <cassert>
 
 
 // Sound speeds
 
-double idealGas::calcSoundSpeed(const std::array<double,5>& arr){ // <<<<<< takes primitive
+double idealGas::calcSoundSpeed(const std::array<double,6>& arr){ // <<<<<< takes primitive
     double eps = arr[0]*(1.0/(gamma1-1))+(1-arr[0])*(1.0/(gamma2-1));
     double Y1 = arr[1]/(arr[1]+arr[2]);
     double Y2 = arr[2]/(arr[1]+arr[2]);
-    double cs1 = (gamma1*arr[4]/(arr[1]/arr[0]));
-    double cs2 = (gamma2*arr[4]/(arr[2]/(1-arr[0])));
+    double cs1 = (gamma1*arr[5]/(arr[1]/arr[0]));
+    double cs2 = (gamma2*arr[5]/(arr[2]/(1-arr[0])));
     return std::sqrt((Y1*(1.0/(gamma1-1))*cs1+Y2*(1.0/(gamma2-1))*cs2)/eps);
 }
 
-double stiffenedGas::calcSoundSpeed(const std::array<double,5>& arr){ // <<<<<<
+double stiffenedGas::calcSoundSpeed(const std::array<double,6>& arr){ // <<<<<<
     return std::sqrt(gamma1*(arr[2]+p_inf1)/arr[0]);
 }
 
@@ -30,31 +30,33 @@ std::array<double,2> EOS::get_gamma(){
 // Consv: a1, rho1*a1, rho2*a2, momentum, energy
 // Prim: a1, rho1, rho2, v, p
 
-std::array<double,5> idealGas::primToConsv(const std::array<double,5>& arr)const{
-    std::array<double,5> result;
+std::array<double,6> idealGas::primToConsv(const std::array<double,6>& arr)const{
+    std::array<double,6> result;
     //assert(arr[0] > 0);
     result[0] = arr[0]; // alpha
     result[1] = arr[1]; // alpha1 * rho1
     result[2] = arr[2]; // alpha2 * rho2 
     result[3] = (arr[1]+arr[2])*arr[3]; // (a1r1 +a2r2)*v
-    result[4] = arr[4]*((arr[0]/(gamma1-1))+(1-arr[0])/(gamma2-1)) + 0.5*(arr[1]+arr[2])*arr[3]*arr[3]; // allaire eq 31
+    result[4] = (arr[1]+arr[2])*arr[4]; // (a1r1 +a2r2)*v
+    result[5] = arr[5]*((arr[0]/(gamma1-1))+(1-arr[0])/(gamma2-1)) + 0.5*(arr[1]+arr[2])*(arr[3]*arr[3] + arr[4]*arr[4]); // allaire eq 31
     return result;
 };
 
-std::array<double,5> idealGas::consvToPrim(const std::array<double,5>& arr)const{
-    std::array<double,5> result;
+std::array<double,6> idealGas::consvToPrim(const std::array<double,6>& arr)const{
+    std::array<double,6> result;
     //assert(arr[0] > 0);
     result[0] = arr[0];
     result[1] = arr[1];
     result[2] = arr[2];
     result[3] = arr[3]/(arr[1]+arr[2]);
-    result[4] = (arr[4]-0.5*arr[3]*arr[3]/(arr[1]+arr[2]))/((arr[0]/(gamma1-1))+(1-arr[0])/(gamma2-1));
+    result[4] = arr[4]/(arr[1]+arr[2]);
+    result[5] = (arr[5]-0.5*(arr[3]*arr[3]+arr[4]*arr[4])/(arr[1]+arr[2]))/((arr[0]/(gamma1-1))+(1-arr[0])/(gamma2-1));
     //print_vect(result);
     return result;
 }
 
-std::array<double,5> stiffenedGas::primToConsv(const std::array<double,5>& arr)const{
-    std::array<double,5> result;
+std::array<double,6> stiffenedGas::primToConsv(const std::array<double,6>& arr)const{
+    std::array<double,6> result;
     assert(arr[0] != 0);
     result[0] = arr[0]; // rho
     result[1] = arr[0]*arr[1]; // rho*v
@@ -62,8 +64,8 @@ std::array<double,5> stiffenedGas::primToConsv(const std::array<double,5>& arr)c
     return result;
 };
 
-std::array<double,5> stiffenedGas::consvToPrim(const std::array<double,5>& arr)const{
-    std::array<double,5> result;
+std::array<double,6> stiffenedGas::consvToPrim(const std::array<double,6>& arr)const{
+    std::array<double,6> result;
     assert(arr[0] != 0);
     result[0] = arr[0];
     result[1] = arr[1]/arr[0];

@@ -4,15 +4,15 @@
 
 class fluid{
     public:
-        std::vector< std::vector < std::array<double,5> > > u, uPlus1, uPrev, uPrim, fluxes;
-        std::vector< std::vector < double > > sStars;
+        std::vector< std::vector < std::array<double,6> > > u, uPlus1, uPrev, uPrim, fluxesX, fluxesY;
+        std::vector< std::vector < double > > sStarsX, sStarsY;
 
-        std::vector< std::vector< std::array<double,5> > > halfSlopes;
-        std::vector< std::vector< std::array<double,5> > > r;
-        std::vector< std::vector< std::array<double,5> > > uBarL;
-        std::vector< std::vector< std::array<double,5> > > uBarR;
-        std::vector< std::vector< std::array<double,5> > > uBarLupd;
-        std::vector< std::vector< std::array<double,5> > > uBarRupd;
+        std::vector< std::vector< std::array<double,6> > > halfSlopesX;
+        std::vector< std::vector< std::array<double,6> > > rX;
+        std::vector< std::vector< std::array<double,6> > > uBarLX;
+        std::vector< std::vector< std::array<double,6> > > uBarRX;
+        std::vector< std::vector< std::array<double,6> > > uBarLupdX;
+        std::vector< std::vector< std::array<double,6> > > uBarRupdX;
 
         fluid(int,int,int);
 

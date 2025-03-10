@@ -11,52 +11,53 @@ class solver{
 
     public:
 
-        enum Cons{FRAC = 0, RHO1, RHO2, XMOM, ENE};
-        enum Prim{UX = 3, PRES};
+        enum Cons{FRAC = 0, RHO1, RHO2, XMOM, YMOM, ENE};
+        enum Prim{UX = 3, UY, PRES};
+        enum dir{YDIR=0, XDIR};
 
         bool PRIM;
 
 
-        void init(std::vector< std::vector< std::array<double,5> > >);
+        void init(std::vector< std::vector< std::array<double,6> > >);
 
 
         void setDt();
         void laxFriedrichs();
-        std::array<double,5> fBurgersLF(std::array<double,5>)const;
-        std::array<double,5> finvectLF(std::array<double,5>)const;
-        std::array<double,5> fEuler(std::array<double,5>, EOS* eos);
+        std::array<double,6> fBurgersLF(std::array<double,6>)const;
+        std::array<double,6> finvectLF(std::array<double,6>)const;
+        std::array<double,6> fEuler(std::array<double,6>, EOS*,bool);
         void Richt();
         void FORCE();
         void SLIC();
         void MUSCL();
-        void HLLCGodunov();
+        void HLLCGodunov(bool);
 
-        std::function<void()> fluxMethod;
+        std::function<void(bool)> fluxMethod;
 
-        std::array<double,5> HLLC(std::array<double,5>,std::array<double,5>, EOS*, int, int);
-        std::array<double,5> laxFhalf(const std::array<double,5>, const std::array<double,5>, EOS* eos)const;
-        std::array<double,5> LF(const std::array<double,5>, const std::array<double,5>, EOS* eos)const;
-        void pointsUpdate();
+        std::array<double,6> HLLC(std::array<double,6>,std::array<double,6>, EOS*, int, int, bool);
+        std::array<double,6> laxFhalf(const std::array<double,6>, const std::array<double,6>, EOS* eos)const;
+        std::array<double,6> LF(const std::array<double,6>, const std::array<double,6>, EOS* eos)const;
+        void pointsUpdate(bool);
         void run();
 
         // slope limiting
         void calcHalfSlopes(bool);
         void calcr();
-        std::array<double,5> static calcSlope(double omega, std::array<double,5> slopeleft, std::array<double,5> sloperight);
+        std::array<double,6> static calcSlope(double omega, std::array<double,6> slopeleft, std::array<double,6> sloperight);
         void calcUBars(bool);
         void updUBars(bool);
-        std::function<std::array<double,5>(std::array<double,5>)> slopeLim;
+        std::function<std::array<double,6>(std::array<double,6>)> slopeLim;
         
-        std::array<double,5> minbee(std::array<double,5>);
-        std::array<double,5> superbee(std::array<double,5>);
-        std::array<double,5> vanLeer(std::array<double,5>);
+        std::array<double,6> minbee(std::array<double,6>);
+        std::array<double,6> superbee(std::array<double,6>);
+        std::array<double,6> vanLeer(std::array<double,6>);
 
         //
 
         void transmissiveBC();
         std::function<void(fluid&)> setBCs;
 
-        std::function<std::array<double,5>(std::array<double,5>,EOS*)> flux;
+        std::function<std::array<double,6>(std::array<double,6>,EOS*,bool)> flux;
 
         void setWriteInterval(double);
         bool checkWrite;
@@ -83,14 +84,14 @@ class solver{
 
         // utility functions
 
-        static void print_arr(std::vector< std::array<double,5> >, int);
-        static void print_vect(std::array<double,5>);
+        static void print_arr(std::vector< std::array<double,6> >, int);
+        static void print_vect(std::array<double,6>);
 
         // Source terms
 
         void sourceUpdate();
-        void allaireSource();
-        std::vector< std::array<double,5> > sourceTerm(const std::vector< std::array<double,5> > uVals, int);
+        void allaireSource(bool,double);
+        std::vector< std::array<double,6> > sourceTerm(const std::vector< std::array<double,6> > uVals, int);
         int alpha;
 
         // EOS handling
@@ -119,7 +120,7 @@ class solver{
 
         
 
-        std::vector< std::array<double,5> > sourceResult;
+        std::vector< std::array<double,6> > sourceResult;
 
         double x0,x1,y0,y1;
 
