@@ -14,8 +14,8 @@
 
 
 int main(){
-    int nCellsX = 975; // 325
-    int nCellsY = 270; // 90
+    int nCellsX = 325; // 325
+    int nCellsY = 90; // 90
     int nGhost = 2;
     double x0{0}, x1{0.325}; // 0.325
     double y0{-0.045}, y1{0.045}; // 0.09

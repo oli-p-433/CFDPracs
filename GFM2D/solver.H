@@ -5,6 +5,7 @@
 #include "EOS.H"
 #include "riem.H"
 #include "boundary.H"
+#include "operators.H"
 
 class solver{
     public:
@@ -205,6 +206,7 @@ class solver{
         const double gamma;
 };
 
+/*
 template<size_t N>
 std::array<double, N> operator-(const std::array<double, N>&, const std::array<double, N>&);
 
@@ -222,7 +224,7 @@ std::array<double, N> operator/(const std::array<double, N>&, const double);
 
 template<size_t N>
 std::array<double, N> elementDivide(const std::array<double, N>&, const std::array<double, N>&);
-
+*/
 
 inline void resize2D(int szY, int szX, std::vector < std::vector < std::array<double,4> > >& arr){
     arr.resize(szY);

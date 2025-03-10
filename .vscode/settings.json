@@ -80,6 +80,7 @@
         "EOS.C": "cpp",
         "operators.C": "cpp",
         "*.ipp": "cpp",
-        "boundary.C": "cpp"
+        "boundary.C": "cpp",
+        "diffuseSolver.C": "cpp"
     }
 }

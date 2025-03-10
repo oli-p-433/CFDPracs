@@ -12,7 +12,7 @@
 
 
 int main(){
-    int nCells = 1000;
+    int nCells = 200;
     double x0{0}, x1{1};
     double startTime = 0.0, endTime = 0.3;
 

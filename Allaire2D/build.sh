@@ -3,8 +3,8 @@
 # Variables
 COMPILER=g++
 DEBUG_FLAGS="-O3"          # -g for debug info, -O0 to disable optimizations
-OUTPUT_EXECUTABLE="fvm1D" # Name of the output executable
-SOURCE_FILES="solver1D.C fvm1D.C EOS.C riem.C"  # Source files
+OUTPUT_EXECUTABLE="fvm" # Name of the output executable
+SOURCE_FILES="diffuseSolver.C fvm.C EOS.C riem.C fluid.C boundary.C"  # Source files
 INCLUDE_PATHS="-I./include"    # If you have any include directories, add them here
 LIBRARIES=""                   # If you need to link any libraries, specify them here
 

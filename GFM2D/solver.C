@@ -2418,7 +2418,7 @@ std::array<double,4> solver::set_vals(double rho, double vx, double vy, double p
 
 
 // ------------------- Overloading operators ------------------ //
-
+/*
 template<size_t N>
 std::array<double, N> operator-(const std::array<double, N>& lhs, const std::array<double, N>& rhs) {
     std::array<double, N> result;
@@ -2517,6 +2517,6 @@ std::array<double, N> operator/(const std::array<double, N>& lhs, const double s
     }
     return result;
 }
-
+*/
 
 

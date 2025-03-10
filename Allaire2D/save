@@ -7,6 +7,6 @@ fi
 varname="$1"
 savename="$2"
 
-rm -r "/mnt/c/Users/olive/MPhilData/Allaire1D/${varname}"
-rm -r "/mnt/c/Users/olive/MPhilData/Allaire1D/${savename}" 
-cp -r "${varname}" "/mnt/c/Users/olive/MPhilData/Allaire1D/${savename}"
+rm -r "/mnt/c/Users/olive/MPhilData/Allaire2D/${varname}"
+rm -r "/mnt/c/Users/olive/MPhilData/Allaire2D/${savename}" 
+cp -r "${varname}" "/mnt/c/Users/olive/MPhilData/Allaire2D/${savename}"

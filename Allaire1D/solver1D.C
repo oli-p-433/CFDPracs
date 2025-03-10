@@ -350,12 +350,12 @@ void solver::updUBars(bool prim){
     } else {
         std::vector< std::vector <double> > B;
         for (size_t i = 0; i<uBarLupd.size(); ++i){
-            double v = uPrim[i][UX]; double rho = uPrim[i][RHO1]+uPrim[i][RHO2];
+            double v = uPrim[i+nGhost-1][UX]; double rho = uPrim[i+nGhost-1][RHO1]+uPrim[i+nGhost-1][RHO2];
             B = {   {v, 0,  0,  0,                                            0},
-                    {0, v,  0,  uPrim[i][RHO1],                               0},
-                    {0, 0,  v,  uPrim[i][RHO2],                               0},
+                    {0, v,  0,  uPrim[i+nGhost-1][RHO1],                               0},
+                    {0, 0,  v,  uPrim[i+nGhost-1][RHO2],                               0},
                     {0, 0,  0,  v,                                      1.0/rho},
-                    {0, 0,  0,  rho*pow(eos[0]->calcSoundSpeed(uPrim[i]),2)  ,v}  };
+                    {0, 0,  0,  rho*pow(eos[0]->calcSoundSpeed(uPrim[i+nGhost-1]),2)  ,v}  };
 
             std::array<double,5> deltaU = uBarR[i]-uBarL[i];
             uBarLupd[i] = eos[0]->primToConsv(uBarL[i]-0.5*(dt/dx)*multiplyMatrixVector(B,deltaU));

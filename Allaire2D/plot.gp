@@ -14,7 +14,7 @@ set style line 2 lt 2 lw 2 dashtype 2   # Dotted line (lt 2 is the line type for
 
 #plot for [file in files] file using 1:($4 < 0 ? $2 : 1/0) with lines,for [file in files] file using  1:($4 > 0 ? $3 : 1/0) with lines, \
 #for [file in files] file using 1:4 with lines
-plot last_file using 1:variable_name, \
+splot last_file using 1:2:variable_name with pm3d, \
 exact_file with lines, \
 #last_file using 1:4 with lines
 pause -1 "Press Enter to exit"
