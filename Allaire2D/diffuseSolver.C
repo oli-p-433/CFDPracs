@@ -13,33 +13,50 @@ void solver::run(){
     setBCs(f);
     std::cout << "set BCs" << std::endl;
 
-    int splitFlip{0};
+    splitFlip = 0;
 
     do{
 
         this->setDt();
-        // dt = 0.1*dx;
-        std::cout << "dt is" << dt << std::endl;
+        std::cout << "time = " << time << "dt is" << dt << std::endl;
 
         setBCs(f);
 
+        int nSubcycle = 1;
+        double sub = static_cast<double>(nSubcycle);
+
         splitFlip++;
         //double halfDt = dt/2.0;
+        double halfDt = dt;
         if (splitFlip%2 == 0){
-            //this->SLIC();
-            //this->MUSCL();
             
             f.uPrev = f.u;
-            this->fluxMethod(XDIR); this->pointsUpdate(XDIR);
-            this->fluxMethod(YDIR); this->pointsUpdate(YDIR);
-            this->allaireSource(XDIR,dt); this->allaireSource(YDIR,dt);
+            this->fluxMethod(XDIR); this->RK2(XDIR);
+            this->fluxMethod(YDIR); this->RK2(YDIR);
+
+            for (int i = 0; i < nSubcycle; ++i){
+                if (splitFlip%4 == 0){
+                    this->allaireSource(XDIR,halfDt/sub); this->allaireSource(YDIR,halfDt/sub);
+                } else {
+                    this->allaireSource(YDIR,halfDt/sub); this->allaireSource(XDIR,halfDt/sub);
+                }
+            }
+
         } else {
-            //this->SLIC();
-            //this->MUSCL();
+
             f.uPrev = f.u;
-            this->fluxMethod(YDIR); this->pointsUpdate(YDIR);
-            this->fluxMethod(XDIR); this->pointsUpdate(XDIR);
-            this->allaireSource(XDIR,dt); this->allaireSource(YDIR,dt);
+            this->fluxMethod(YDIR); this->RK2(YDIR);
+            this->fluxMethod(XDIR); this->RK2(XDIR);
+
+            for (int i = 0; i < nSubcycle; ++i){
+                if (splitFlip%4 == 0){
+                    this->allaireSource(YDIR,halfDt/sub); this->allaireSource(XDIR,halfDt/sub);
+                } else {
+                    this->allaireSource(XDIR,halfDt/sub); this->allaireSource(YDIR,halfDt/sub);
+                }
+            }
+
+            
         }
 
 
@@ -57,9 +74,9 @@ void solver::run(){
 };
 
 
-void solver::SLIC(){
+void solver::SLIC(bool direction){
     if (PRIM == 1){
-        std::cout << "starting primitive SLIC" << std::endl;
+        //std::cout << "starting primitive SLIC" << std::endl;
         for (size_t i = 0; i < f.uPrim.size(); ++i){
             for (size_t j = 0; j < f.uPrim[0].size(); ++j){
                 f.uPrim[i][j] = eos[0]->consvToPrim(f.u[i][j]);
@@ -67,54 +84,70 @@ void solver::SLIC(){
         }
 
     } else {
-        std::cout << "starting conservative SLIC" << std::endl;
+        //std::cout << "starting conservative SLIC" << std::endl;
     }
 
-    std::cout << "uPrim calculated, calc halfslopes" << std::endl;
-    calcHalfSlopes(PRIM);
+    //std::cout << "uPrim calculated, calc halfslopes" << std::endl;
+    calcHalfSlopes(PRIM,direction);
 
-    std::cout << "calcr" << std::endl;
-    calcr();
+    //std::cout << "calcr" << std::endl;
+    calcr(direction);
 
-    std::cout << "calcUBars" << std::endl;
-    calcUBars(PRIM);
+    //std::cout << "calcUBars" << std::endl;
+    calcUBars(PRIM,direction);
 
-    std::cout << "updUBars" << std::endl;
-    updUBars(PRIM);
+    //std::cout << "updUBars" << std::endl;
+    updUBars(PRIM,direction);
 
-    for (size_t i = 0; i < f.fluxesX.size(); ++i) {
-        for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
-            f.fluxesX[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0])),eos[0],XDIR)+LF(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0])); // fluxesX stored in conserved variable form
+    if (direction == XDIR){
+        for (size_t i = 0; i < f.fluxesX.size(); ++i) {
+            for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
+                f.fluxesX[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],XDIR)),eos[0],XDIR)+LF(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],XDIR)); // fluxesX stored in conserved variable form
+            }
+        }
+    } else {
+        for (size_t j = 0; j < f.fluxesY[0].size(); ++j) {
+            for (size_t i = 0; i < f.fluxesY.size(); ++i){
+                f.fluxesY[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(f.uBarRY[i][j],f.uBarLY[i+1][j],eos[0],YDIR)),eos[0],YDIR)+LF(f.uBarRY[i][j],f.uBarLY[i+1][j],eos[0],YDIR)); // fluxesX stored in conserved variable form
+            }
         }
     }
 
-    std::cout << std::endl << "-----------------------fluxesX above-------------------------" << std::endl;
+    //std::cout << std::endl << "-----------------------fluxesX above-------------------------" << std::endl;
 }
 
-void solver::MUSCL(){
+void solver::MUSCL(bool direction){
     
     if (PRIM == 1){
-        std::cout << "starting Primitive MUSCL" << std::endl;
+        //std::cout << "starting Primitive MUSCL" << std::endl;
         for (size_t i = 0; i < f.uPrim.size(); ++i){
             for (size_t j = 0; j < f.uPrim[0].size(); ++j){
                 f.uPrim[i][j] = eos[0]->consvToPrim(f.u[i][j]);
             }
         }
     } else {
-        std::cout << "starting conservative MUSCL" << std::endl;
+        //std::cout << "starting conservative MUSCL" << std::endl;
     }
 
-    calcHalfSlopes(PRIM);
+    calcHalfSlopes(PRIM,direction);
 
-    calcr();
+    calcr(direction);
 
-    calcUBars(PRIM);
+    calcUBars(PRIM,direction);
 
-    updUBars(PRIM);
+    updUBars(PRIM,direction);
 
-    for (size_t i=0; i < f.fluxesX.size(); ++i){
-        for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
-            f.fluxesX[i][j] = HLLC(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],i,j,XDIR);
+    if (direction == XDIR){
+        for (size_t i=0; i < f.fluxesX.size(); ++i){
+            for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
+                f.fluxesX[i][j] = HLLC(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],i,j,XDIR);
+            }
+        }
+    } else {
+        for (size_t j=0; j < f.fluxesY[0].size(); ++j){
+            for (size_t i = 0; i < f.fluxesY.size(); ++i){
+                f.fluxesY[i][j] = HLLC(f.uBarRY[i][j],f.uBarLY[i+1][j],eos[0],i,j,YDIR);
+            }
         }
     }
 }
@@ -157,7 +190,7 @@ std::array<double,6> solver::HLLC(std::array<double,6> left,std::array<double,6>
 
     // easy wavespeed
     SL = (direction == XDIR) ? std::min(LPrim[UX] - eos->calcSoundSpeed(LPrim), RPrim[UX] - eos->calcSoundSpeed(RPrim)) : std::min(LPrim[UY] - eos->calcSoundSpeed(LPrim), RPrim[UY] - eos->calcSoundSpeed(RPrim));
-    SR = (direction == YDIR) ? std::max(LPrim[UX] + eos->calcSoundSpeed(LPrim), RPrim[UX] + eos->calcSoundSpeed(RPrim)) : std::max(LPrim[UY] + eos->calcSoundSpeed(LPrim), RPrim[UY] + eos->calcSoundSpeed(RPrim));
+    SR = (direction == XDIR) ? std::max(LPrim[UX] + eos->calcSoundSpeed(LPrim), RPrim[UX] + eos->calcSoundSpeed(RPrim)) : std::max(LPrim[UY] + eos->calcSoundSpeed(LPrim), RPrim[UY] + eos->calcSoundSpeed(RPrim));
     //std::cout << SL << " " << SR << std::endl;
     if ((std::isnan(SL) == 1) || (std::isnan(SR) == 1)){
         std::cout << "SL SR " << SL << " " << SR << std::endl;
@@ -168,11 +201,11 @@ std::array<double,6> solver::HLLC(std::array<double,6> left,std::array<double,6>
 
     // Calculate the numerator of sStar
     double numerator = (direction == XDIR) ? RPrim[PRES] - LPrim[PRES] + rhoL * LPrim[UX] * (SL - LPrim[UX]) - rhoR * RPrim[UX] * (SR - RPrim[UX])
-                    : RPrim[PRES] - LPrim[PRES] + rhoL * LPrim[UY] * (SL - LPrim[UY]) - rhoR * RPrim[UY] * (SR - RPrim[UY]);
+                                        : RPrim[PRES] - LPrim[PRES] + rhoL * LPrim[UY] * (SL - LPrim[UY]) - rhoR * RPrim[UY] * (SR - RPrim[UY]);
     
     // Calculate the denominator of sStar
     double denominator = (direction == XDIR) ? rhoL * (SL - LPrim[UX]) - rhoR * (SR - RPrim[UX])
-                    : rhoL * (SL - LPrim[UY]) - rhoR * (SR - RPrim[UY]);
+                                            : rhoL * (SL - LPrim[UY]) - rhoR * (SR - RPrim[UY]);
 
     
     // Calculate sStar
@@ -192,15 +225,17 @@ std::array<double,6> solver::HLLC(std::array<double,6> left,std::array<double,6>
         throw std::runtime_error("sStar is nan");
     }
 
-    if (direction == XDIR){
-        f.sStarsX[i][j] = sStar;
-    } else {
-        f.sStarsY[i][j] = sStar;
+    if (isGodunov == true){
+        if (direction == XDIR){
+            f.sStarsX[i][j] = sStar;
+        } else {
+            f.sStarsY[i][j] = sStar;
+        }
     }
     
     //
     double prefL = (direction == XDIR) ? (SL-LPrim[UX])/(SL-sStar) : (SL-LPrim[UY])/(SL-sStar);
-    double prefR = (direction == XDIR) ? (SR-RPrim[UX])/(SR-sStar) : (SR-RPrim[UX])/(SR-sStar);
+    double prefR = (direction == XDIR) ? (SR-RPrim[UX])/(SR-sStar) : (SR-RPrim[UY])/(SR-sStar);
 
     double eL,eR;
     eL = (direction == XDIR) ? (left[ENE]/rhoL)+(sStar-LPrim[UX])*(sStar+LPrim[PRES]/(rhoL*(SL-LPrim[UX])))
@@ -216,15 +251,18 @@ std::array<double,6> solver::HLLC(std::array<double,6> left,std::array<double,6>
     uHLLCR = (direction == XDIR) ? std::array<double,6>{right[FRAC], right[RHO1]*prefR, right[RHO2]*prefR, rhoR*prefR*sStar, rhoR*prefR*RPrim[UY], rhoR*prefR*eR}
                                 : std::array<double,6>{right[FRAC], right[RHO1]*prefR, right[RHO2]*prefR, rhoR*prefR*RPrim[UX], rhoR*prefR*sStar, rhoR*prefR*eR}; // ?
 
+    std::array<double,6> alpFlux = {0,0,0,0,0,0};
+    alpFlux[0] = (direction == XDIR) ? 0.5*(RPrim[UX]*right[FRAC]+LPrim[UX]*left[FRAC]) - 0.5*std::abs(0.5*(RPrim[UX]+LPrim[UX]))*(right[FRAC]-left[FRAC])
+                                : 0.5*(RPrim[UY]*right[FRAC]+LPrim[UY]*left[FRAC]) - 0.5*std::abs(0.5*(RPrim[UY]+LPrim[UY]))*(right[FRAC]-left[FRAC]);
     
     if (0 <= SL){
-        return flux(LPrim,eos,direction);
+        return flux(LPrim,eos,direction) + alpFlux;
     } else if (SL < 0 && 0 <= sStar){
-        return flux(LPrim,eos,direction)+SL*(uHLLCL-left);
+        return flux(LPrim,eos,direction)+SL*(uHLLCL-left) + alpFlux;
     } else if (sStar < 0 && 0 <= SR){
-        return flux(RPrim,eos,direction)+SR*(uHLLCR-right);
+        return flux(RPrim,eos,direction)+SR*(uHLLCR-right) + alpFlux;
     } else if (SR < 0){
-        return flux(RPrim,eos,direction);
+        return flux(RPrim,eos,direction) + alpFlux;
     } else {
         throw std::runtime_error("wavespeed condition invalid");
     }
@@ -271,6 +309,35 @@ void solver::pointsUpdate(bool direction){
     //std::cout << "updated u" << std::endl;
     // }
 };
+
+void solver::RK2(bool direction){
+    std::vector< std::vector< std::array<double,6> > > uStored = f.u;
+    if (direction == XDIR){
+        this->pointsUpdate(XDIR); // gives updated u
+        f.uPlus1 = f.u; // stores new u as uPlus1
+        this->fluxMethod(XDIR); // calculates fluxes for new u
+
+        for (size_t i = nG; i < f.u.size() - nG; ++i){
+            for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
+                f.uPlus1[i][j] = 0.5*(uStored[i][j]+f.uPlus1[i][j]) - 0.5 * (dt / dx) * (f.fluxesX[i-nG][j-nG+1] - f.fluxesX[i-nG][j-nG]); // flux[i + 1] and flux[i] for the update
+            }
+        }
+    } else {
+        this->pointsUpdate(YDIR); // gives updated u
+        f.uPlus1 = f.u; // stores new u as uPlus1
+        this->fluxMethod(YDIR); // calculates fluxes for new u
+
+        for (size_t j = nG; j < f.u[0].size() - nG; ++j){
+            for (size_t i = nG; i < f.u.size() - nG; ++i) {
+                f.uPlus1[i][j] = 0.5*(uStored[i][j]+f.uPlus1[i][j]) - 0.5 * (dt / dx) * (f.fluxesY[i-nG+1][j-nG] - f.fluxesY[i-nG][j-nG]); // flux[i + 1] and flux[i] for the update
+            }
+        }
+
+    }
+    f.u = f.uPlus1;
+    setBCs(f);
+
+}
 
 // ---------------- Source Terms ---------------------------- //
 
@@ -344,7 +411,7 @@ std::array<double,6> solver::fBurgersLF(const std::array<double,6> x)const{
 std::array<double,6> solver::fEuler(std::array<double,6> arr, EOS* eos, bool direction){ // takes primitive variables
     std::array<double,6> result;
     if (direction == XDIR){
-        result[FRAC] = arr[FRAC]*arr[UX]; // vol fraction 
+        result[FRAC] = 0; // vol fraction 
         result[RHO1] = arr[RHO1]*arr[UX]; // rho1*v
         result[RHO2] = arr[RHO2]*arr[UX]; // rho2*v
         result[XMOM] = (arr[RHO1]+arr[RHO2])*arr[UX]*arr[UX] + arr[PRES]; // rho*v^2 + p
@@ -352,7 +419,7 @@ std::array<double,6> solver::fEuler(std::array<double,6> arr, EOS* eos, bool dir
         result[ENE] = (eos->primToConsv(arr)[ENE] + arr[PRES])*arr[UX]; // (E + p)v
         return result;
     } else {
-        result[FRAC] = arr[FRAC]*arr[UY]; // vol fraction 
+        result[FRAC] = 0; // vol fraction 
         result[RHO1] = arr[RHO1]*arr[UY]; // rho1*v
         result[RHO2] = arr[RHO2]*arr[UY]; // rho2*v
         result[XMOM] = (arr[RHO1]+arr[RHO2])*arr[UX]*arr[UY]; // rho*vx*vy
@@ -365,34 +432,60 @@ std::array<double,6> solver::fEuler(std::array<double,6> arr, EOS* eos, bool dir
 
 // ------------------------- secondary fluxesX --------------------- //
 
-std::array<double,6> solver::LF(std::array<double,6> v1, std::array<double,6> v2, EOS* eos)const{
-    return 0.5 * (flux(eos->consvToPrim(v1),eos,XDIR) + flux(eos->consvToPrim(v2),eos,XDIR)) + 0.5 * (dx / dt) * (v1 - v2);
+std::array<double,6> solver::LF(std::array<double,6> v1, std::array<double,6> v2, EOS* eos,bool direction)const{
+    if (direction == XDIR){
+        return 0.5 * (flux(eos->consvToPrim(v1),eos,XDIR) + flux(eos->consvToPrim(v2),eos,XDIR)) + 0.5 * (dx / dt) * (v1 - v2);
+    } else {
+        return 0.5 * (flux(eos->consvToPrim(v1),eos,YDIR) + flux(eos->consvToPrim(v2),eos,YDIR)) + 0.5 * (dy / dt) * (v1 - v2);
+    }
+    
 };
 
-std::array<double,6> solver::laxFhalf(std::array<double,6> ui, std::array<double,6> uip1, EOS* eos)const{
-    return 0.5*(ui+uip1)-(0.5*(dt/dx)*(flux(eos->consvToPrim(uip1),eos,XDIR)-flux(eos->consvToPrim(ui),eos,XDIR)));
+std::array<double,6> solver::laxFhalf(std::array<double,6> ui, std::array<double,6> uip1, EOS* eos, bool direction)const{
+    if (direction == XDIR){
+        return 0.5*(ui+uip1)-(0.5*(dt/dx)*(flux(eos->consvToPrim(uip1),eos,XDIR)-flux(eos->consvToPrim(ui),eos,XDIR)));
+    } else {
+        return 0.5*(ui+uip1)-(0.5*(dt/dy)*(flux(eos->consvToPrim(uip1),eos,YDIR)-flux(eos->consvToPrim(ui),eos,YDIR)));
+    }
 };
 
 
 
 // -------------- Slope limiting ---------------------------- //
 
-void solver::calcHalfSlopes(bool prim){
-    for (size_t i=0; i < f.halfSlopesX.size(); ++i){
-        for (size_t j = 0; j < f.halfSlopesX[0].size(); ++j){ // halfslopes[i] = halfslopes i-1/2
-            f.halfSlopesX[i][j] = (prim == 0) ? f.u[i+nG][j+1]-f.u[i+nG][j] : f.uPrim[i+nG][j+1]-f.uPrim[i+nG][j];
+void solver::calcHalfSlopes(bool prim, bool direction){
+    if (direction == XDIR){
+        for (size_t i=0; i < f.halfSlopesX.size(); ++i){
+            for (size_t j = 0; j < f.halfSlopesX[0].size(); ++j){ // halfslopes[i] = halfslopes i-1/2
+                f.halfSlopesX[i][j] = (prim == 0) ? f.u[i+nG][j+1]-f.u[i+nG][j] : f.uPrim[i+nG][j+1]-f.uPrim[i+nG][j];
+            }
+        }
+    } else {
+        for (size_t j=0; j < f.halfSlopesY[0].size(); ++j){
+            for (size_t i = 0; i < f.halfSlopesY.size(); ++i){ // halfslopes[i] = halfslopes i-1/2
+                f.halfSlopesY[i][j] = (prim == 0) ? f.u[i+1][j+nG]-f.u[i][j+nG] : f.uPrim[i+1][j+nG]-f.uPrim[i][j+nG];
+            }
         }
     }
+
 };
 
-void solver::calcr(){
-    for (size_t i=0; i < f.rX.size(); ++i){
-        for (size_t j = 0; j < f.rX[0].size(); ++j){
-            f.rX[i][j] = elementDivide(f.halfSlopesX[i][j],f.halfSlopesX[i][j+1]);
+void solver::calcr(bool direction){
+    if (direction == XDIR){
+        for (size_t i=0; i < f.rX.size(); ++i){
+            for (size_t j = 0; j < f.rX[0].size(); ++j){
+                f.rX[i][j] = elementDivide(f.halfSlopesX[i][j],f.halfSlopesX[i][j+1]);
+            }
+        }
+    } else {
+        for (size_t j=0; j < f.rY[0].size(); ++j){
+            for (size_t i = 0; i < f.rY.size(); ++i){
+                f.rY[i][j] = elementDivide(f.halfSlopesY[i][j],f.halfSlopesY[i+1][j]);
+            }
         }
     }
     //print_arr(r);
-    std::cout << "calcd r" << std::endl;
+    //std::cout << "calcd r" << std::endl;
 };
 
 
@@ -413,16 +506,30 @@ void solver::calcr(){
 */
 
 
-void solver::calcUBars(bool prim){ // calculates for all u except leftmost cell
-    for (size_t i = 0; i < f.uBarLX.size(); ++i){
-        for (size_t j = 0; j < f.uBarLX[0].size(); ++j){
-            f.uBarLX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
-            f.uBarRX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
+void solver::calcUBars(bool prim, bool direction){ // calculates for all u except leftmost cell
+    if (direction == XDIR){
+        for (size_t i = 0; i < f.uBarLX.size(); ++i){
+            for (size_t j = 0; j < f.uBarLX[0].size(); ++j){
+                f.uBarLX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
+                f.uBarRX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
+            }
         }
-    }
-    for (size_t i = 0; i < f.sStarsX.size(); ++i){
-        for (size_t j = 0; j < f.sStarsX[0].size(); ++j){
-            f.sStarsX[i][j] = (prim == 0) ? 0.5*(eos[0]->consvToPrim(f.uBarRX[i][j])[UX]+eos[0]->consvToPrim(f.uBarLX[i][j+1])[UX]) : 0.5*(f.uBarRX[i][j][UX]+f.uBarLX[i][j+1][UX]);
+        for (size_t i = 0; i < f.sStarsX.size(); ++i){
+            for (size_t j = 0; j < f.sStarsX[0].size(); ++j){
+                f.sStarsX[i][j] = (prim == 0) ? 0.5*(eos[0]->consvToPrim(f.uBarRX[i][j])[UX]+eos[0]->consvToPrim(f.uBarLX[i][j+1])[UX]) : 0.5*(f.uBarRX[i][j][UX]+f.uBarLX[i][j+1][UX]);
+            }
+        }
+    } else {
+        for (size_t j = 0; j < f.uBarLY[0].size(); ++j){
+            for (size_t i = 0; i < f.uBarLY.size(); ++i){
+                f.uBarLY[i][j] = (prim == 0) ? f.u[i+nG-1][j+nG] - 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j])) : f.uPrim[i+nG-1][j+nG] - 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j]));
+                f.uBarRY[i][j] = (prim == 0) ? f.u[i+nG-1][j+nG] + 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j])) : f.uPrim[i+nG-1][j+nG] + 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j]));
+            }
+        }
+        for (size_t j = 0; j < f.sStarsY[0].size(); ++j){
+            for (size_t i = 0; i < f.sStarsY.size(); ++i){
+                f.sStarsY[i][j] = (prim == 0) ? 0.5*(eos[0]->consvToPrim(f.uBarRY[i][j])[UY]+eos[0]->consvToPrim(f.uBarLY[i+1][j])[UY]) : 0.5*(f.uBarRY[i][j][UY]+f.uBarLY[i+1][j][UY]);
+            }
         }
     }
 
@@ -432,7 +539,7 @@ std::array<double,6> multiplyMatrixVector(
     const std::vector<std::vector<double>>& B,
     const std::array<double,6>& x) {
     
-    std::array<double,6> result = {0.0, 0.0, 0.0, 0.0, 0.0};
+    std::array<double,6> result = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     
     for (size_t i = 0; i < 6; ++i) {
         for (size_t j = 0; j < 6; ++j) {
@@ -443,35 +550,66 @@ std::array<double,6> multiplyMatrixVector(
     return result;
 }
 
-void solver::updUBars(bool prim){
-    if (prim == 0){
-        for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
-            for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
-                f.uBarLupdX[i][j] = f.uBarLX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(f.uBarRX[i][j]),eos[0],XDIR)-flux(eos[0]->consvToPrim(f.uBarLX[i][j]),eos[0],XDIR));
-                f.uBarRupdX[i][j] = f.uBarRX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(f.uBarRX[i][j]),eos[0],XDIR)-flux(eos[0]->consvToPrim(f.uBarLX[i][j]),eos[0],XDIR));
+void solver::updUBars(bool prim,bool direction){
+    if (direction == XDIR){
+        if (prim == false){
+            for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
+                for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
+                    f.uBarLupdX[i][j] = f.uBarLX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(f.uBarRX[i][j]),eos[0],XDIR)-flux(eos[0]->consvToPrim(f.uBarLX[i][j]),eos[0],XDIR));
+                    f.uBarRupdX[i][j] = f.uBarRX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(f.uBarRX[i][j]),eos[0],XDIR)-flux(eos[0]->consvToPrim(f.uBarLX[i][j]),eos[0],XDIR));
+                }
             }
+        } else {
+            std::vector< std::vector <double> > B;
+            for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
+                for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
+                    double v = f.uPrim[i+nG][j+nG-1][UX]; double rho = f.uPrim[i+nG][j+nG-1][RHO1]+f.uPrim[i+nG][j+nG-1][RHO2];
+                    B = {   {v, 0,  0,  0,                           0,                              0},
+                            {0, v,  0,  f.uPrim[i+nG][j+nG-1][RHO1], 0,                              0},
+                            {0, 0,  v,  f.uPrim[i+nG][j+nG-1][RHO2], 0,                              0},
+                            {0, 0,  0,  v,                           0,                        1.0/rho},
+                            {0, 0,  0,  0,                           v,                              0},
+                            {0, 0,  0,  rho*pow(eos[0]->calcSoundSpeed(f.uPrim[i+nG][j+nG-1]),2), 0, v}     };
+
+                    std::array<double,6> deltaU = f.uBarRX[i][j]-f.uBarLX[i][j];
+                    f.uBarLupdX[i][j] = eos[0]->primToConsv(f.uBarLX[i][j]-0.5*(dt/dx)*multiplyMatrixVector(B,deltaU));
+                    f.uBarRupdX[i][j] = eos[0]->primToConsv(f.uBarRX[i][j]-0.5*(dt/dx)*multiplyMatrixVector(B,deltaU));
+                }
+            }
+
         }
+        f.uBarLX = f.uBarLupdX;
+        f.uBarRX = f.uBarRupdX;
     } else {
-        std::vector< std::vector <double> > B;
-        for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
-            for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
-                double v = f.uPrim[i+nG][j+nG-1][UX]; double rho = f.uPrim[i+nG][j+nG-1][RHO1]+f.uPrim[i+nG][j+nG-1][RHO2];
-                B = {   {v, 0,  0,  0,                           0,                              0},
-                        {0, v,  0,  f.uPrim[i+nG][j+nG-1][RHO1], 0,                              0},
-                        {0, 0,  v,  f.uPrim[i+nG][j+nG-1][RHO2], 0,                              0},
-                        {0, 0,  0,  v,                           0,                        1.0/rho},
-                        {0, 0,  0,  0,                           v,                              0},
-                        {0, 0,  0,  rho*pow(eos[0]->calcSoundSpeed(f.uPrim[i+nG][j+nG-1]),2), 0, v}     };
-
-                std::array<double,6> deltaU = f.uBarRX[i][j]-f.uBarLX[i][j];
-                f.uBarLupdX[i][j] = eos[0]->primToConsv(f.uBarLX[i][j]-0.5*(dt/dx)*multiplyMatrixVector(B,deltaU));
-                f.uBarRupdX[i][j] = eos[0]->primToConsv(f.uBarRX[i][j]-0.5*(dt/dx)*multiplyMatrixVector(B,deltaU));
+        if (prim == false){
+            for (size_t j = 0; j<f.uBarLupdY[0].size(); ++j){
+                for (size_t i = 0; i<f.uBarLupdY.size(); ++i){
+                    f.uBarLupdY[i][j] = f.uBarLY[i][j]-0.5*(dt/dy)*(flux(eos[0]->consvToPrim(f.uBarRY[i][j]),eos[0],YDIR)-flux(eos[0]->consvToPrim(f.uBarLY[i][j]),eos[0],YDIR));
+                    f.uBarRupdY[i][j] = f.uBarRY[i][j]-0.5*(dt/dy)*(flux(eos[0]->consvToPrim(f.uBarRY[i][j]),eos[0],YDIR)-flux(eos[0]->consvToPrim(f.uBarLY[i][j]),eos[0],YDIR));
+                }
             }
-        }
+        } else {
+            std::vector< std::vector <double> > B;
+            for (size_t j = 0; j<f.uBarLupdY[0].size(); ++j){
+                for (size_t i = 0; i<f.uBarLupdY.size(); ++i){
+                    double v = f.uPrim[i+nG-1][j+nG][UY]; double rho = f.uPrim[i+nG-1][j+nG][RHO1]+f.uPrim[i+nG-1][j+nG][RHO2];
+                    B = {   {v, 0,  0,  0,                           0,                              0},
+                            {0, v,  0,  0, f.uPrim[i+nG-1][j+nG][RHO1],                              0},
+                            {0, 0,  v,  0, f.uPrim[i+nG-1][j+nG][RHO2],                              0},
+                            {0, 0,  0,  v,                           0,                              0},
+                            {0, 0,  0,  0,                           v,                        1.0/rho},
+                            {0, 0,  0,  0, rho*pow(eos[0]->calcSoundSpeed(f.uPrim[i+nG-1][j+nG]),2), v}     };
 
+                    std::array<double,6> deltaU = f.uBarRY[i][j]-f.uBarLY[i][j];
+                    f.uBarLupdY[i][j] = eos[0]->primToConsv(f.uBarLY[i][j]-0.5*(dt/dy)*multiplyMatrixVector(B,deltaU));
+                    f.uBarRupdY[i][j] = eos[0]->primToConsv(f.uBarRY[i][j]-0.5*(dt/dy)*multiplyMatrixVector(B,deltaU));
+                }
+            }
+
+        }
+        f.uBarLY = f.uBarLupdY;
+        f.uBarRY = f.uBarRupdY;
     }
-    f.uBarLX = f.uBarLupdX;
-    f.uBarRX = f.uBarRupdX;
 };
 
 std::array<double,6> solver::calcSlope(double omega, std::array<double,6> slopeleft, std::array<double,6> sloperight){
@@ -479,9 +617,9 @@ std::array<double,6> solver::calcSlope(double omega, std::array<double,6> slopel
 };
 
 std::array<double,6> solver::minbee(std::array<double,6> slp){
-    std::array<double,6> minbArr{0,0,0};
+    std::array<double,6> minbArr{0,0,0,0,0,0};
     double minb;
-    for (int k = 0; k<4; ++k){
+    for (int k = 0; k<6; ++k){
         if (slp[k] <= 0 || slp[k] == INFINITY){
             minb = 0;
         } else if (slp[k] > 1){
@@ -494,14 +632,14 @@ std::array<double,6> solver::minbee(std::array<double,6> slp){
     auto minminB = std::min_element(minbArr.begin(),minbArr.end());
     double minBval = *minminB;
     //return {minbArr[3],minbArr[3],minbArr[3],minbArr[3]};
-    return {minBval,minBval,minBval,minBval};
-    //return minbArr;
+    //return {minBval,minBval,minBval,minBval};
+    return minbArr;
 };
 
 std::array<double,6> solver::superbee(std::array<double,6> slp){
-    std::array<double,6> minbArr{0,0,0};
+    std::array<double,6> minbArr{0,0,0,0,0,0};
     double minb;
-    for (int k = 0; k<4; ++k){
+    for (int k = 0; k<6; ++k){
         if (slp[k] <= 0 || slp[k] == INFINITY){
             minb = 0;
         } else if (slp[k] <= 0.5){
@@ -520,11 +658,9 @@ std::array<double,6> solver::superbee(std::array<double,6> slp){
     return minbArr;
 };
 
-
-
 std::array<double,6> solver::vanLeer(std::array<double,6> slp){
-    std::array<double,6> minbArr{0,0,0};
-    for (int k = 0; k<4; ++k){
+    std::array<double,6> minbArr{0,0,0,0,0,0};
+    for (int k = 0; k<6; ++k){
         if (slp[k] <= 0 || slp[k] == INFINITY){
             minbArr[k] = 0;
         } else {
@@ -534,8 +670,8 @@ std::array<double,6> solver::vanLeer(std::array<double,6> slp){
     auto minminB = std::min_element(minbArr.begin(),minbArr.end());
     double minBval = *minminB;
     //return {minbArr[3],minbArr[3],minbArr[3],minbArr[3]};
-    //return minbArr;
-    return {minBval,minBval,minBval,minBval};
+    return minbArr;
+    //return {minBval,minBval,minBval,minBval};
 };
 
 
@@ -562,10 +698,13 @@ void solver::setDt(){
     for (size_t i = nG; i < f.u.size()-nG; ++i) {
         for (size_t j = nG; j < f.u[0].size()-nG; ++j) {
             //std::cout << "sound speed " << eos[0]->calcSoundSpeed(u[i]) << std::endl;
-            aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(f.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(f.u[i][j])[UY],2)) + eos[0]->calcSoundSpeed(f.u[i][j]));
+            aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(f.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(f.u[i][j])[UY],2)) + eos[0]->calcSoundSpeed(eos[0]->consvToPrim(f.u[i][j])));
         }
     }
-    dt = cour * dx / std::fabs(aMax);
+
+    dtReducer = (splitFlip < 20) ? 0.5 : 1.0;
+
+    dt = dtReducer * cour * std::min(dx,dy) / std::fabs(aMax);
 
     std::cout << "set dt" << std::endl;
 
@@ -587,7 +726,7 @@ void solver::setDt(){
         time = time + dt;
     }
 
-    if (std::fabs(writeTime - time) < 1e-6){
+    if (std::fabs(writeTime - time) < 1e-9){
         checkWrite = 1;
     } else {
         checkWrite = 0;
@@ -607,7 +746,7 @@ solver::solver(double x_0, double x_1, double y_0, double y_1, double t0, double
         cour(c){
     
     assert(t1>t0);
-    timeMulti = 1; // 1.0/(endTime-startTime);
+    timeMulti = 1000; // 1.0/(endTime-startTime);
 
     dx = (x1 - x0)/nCellsX;
     dy = (y1 - y0)/nCellsY;

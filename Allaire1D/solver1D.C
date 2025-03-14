@@ -13,32 +13,29 @@ void solver::run(){
     transmissiveBC();
     std::cout << "set BCs" << std::endl;
 
+    int nSubcycle = 1;
+    double sub = static_cast<double>(nSubcycle);
+
+    writeData();
+
+    std::cout << "first update done, starting loop" << std::endl;
+
     do{
 
         this->setDt();
+
         // dt = 0.1*dx;
         std::cout << "dt is" << dt << std::endl;
 
-        transmissiveBC();
-
-        //this->SLIC();
-        //this->MUSCL();
         uPrev = u;
         this->fluxMethod();
-        //std::cout << "Fluxes" << std::endl;
-        //print_arr(fluxes,0);
-        //std::cout << "u" << std::endl;
+        //this->pointsUpdate();
+        this->RK2();
 
-        //print_arr(u,0);
-        this->pointsUpdate();
-        //std::cout << "points updated" << std::endl;
-        //print_arr(u,0);
-        this->allaireSource();
-        //std::cout << "allaire source updated" << std::endl;
-        //print_arr(u,0);
-
-        
-
+        for (int i = 0; i < nSubcycle; ++i){
+            this->allaireSource(dt/sub);
+        }
+        uPrev = u;
 
         if (checkWrite==1){
             std::cout << "writing " << time << std::endl;
@@ -131,7 +128,6 @@ std::array<double,5> solver::HLLC(std::array<double,5> left,std::array<double,5>
     // easy wavespeed
     SL = std::min(LPrim[UX] - eos->calcSoundSpeed(LPrim), RPrim[UX] - eos->calcSoundSpeed(RPrim));
     SR = std::max(LPrim[UX] + eos->calcSoundSpeed(LPrim), RPrim[UX] + eos->calcSoundSpeed(RPrim));
-    //std::cout << SL << " " << SR << std::endl;
     if ((std::isnan(SL) == 1) || (std::isnan(SR) == 1)){
         std::cout << "SL SR " << SL << " " << SR << std::endl;
     }
@@ -177,15 +173,18 @@ std::array<double,5> solver::HLLC(std::array<double,5> left,std::array<double,5>
     uHLLCL = {left[FRAC], left[RHO1]*prefL, left[RHO2]*prefL, rhoL*prefL*sStar, rhoL*prefL*eL}; // ?
     uHLLCR = {right[FRAC], right[RHO1]*prefR, right[RHO2]*prefR, rhoR*prefR*sStar, rhoR*prefR*eR}; // ?
 
-    
+    std::array<double,5> alpFlux = {0,0,0,0,0};
+    alpFlux[0] = 0.5*(RPrim[UX]*right[FRAC]+LPrim[UX]*left[FRAC]) - 0.5*std::abs(0.5*(RPrim[UX]+LPrim[UX]))*(right[FRAC]-left[FRAC]);
+    //alpFlux[0] = 0.5*(RPrim[UX]*right[FRAC]+LPrim[UX]*left[FRAC]);
+
     if (0 <= SL){
-        return flux(LPrim,eos);
+        return flux(LPrim,eos) + alpFlux;
     } else if (SL < 0 && 0 <= sStar){
-        return flux(LPrim,eos)+SL*(uHLLCL-left);
+        return flux(LPrim,eos)+SL*(uHLLCL-left) + alpFlux;
     } else if (sStar < 0 && 0 <= SR){
-        return flux(RPrim,eos)+SR*(uHLLCR-right);
+        return flux(RPrim,eos)+SR*(uHLLCR-right) + alpFlux;
     } else if (SR < 0){
-        return flux(RPrim,eos);
+        return flux(RPrim,eos) + alpFlux;
     } else {
         throw std::runtime_error("wavespeed condition invalid");
     }
@@ -209,17 +208,32 @@ void solver::transmissiveBC(){
 
 
 void solver::pointsUpdate(){
-    transmissiveBC();
 
     for (std::vector<double>::size_type i = nGhost; i < u.size() - nGhost; ++i) {
-        //std::cout << (dt / dx) * (fluxes[i-nGhost+1] - fluxes[i-nGhost])[0] << std::endl;
+        // 1st order
         uPlus1[i] = u[i] - (dt / dx) * (fluxes[i-nGhost+1] - fluxes[i-nGhost]); // flux[i + 1] and flux[i] for the update
     }
     u = uPlus1;
+    transmissiveBC();
     // print_arr(u,1);
     //std::cout << "updated u" << std::endl;
     // }
 };
+
+void solver::RK2(){
+    std::vector<std::array<double,5>> uStored = u;
+    this->pointsUpdate(); // gives updated u
+    uPlus1 = u; // stores new u as uPlus1
+    this->fluxMethod(); // calculates fluxes for new u
+
+    for (std::vector<double>::size_type i = nGhost; i < u.size() - nGhost; ++i) {
+        uPlus1[i] = 0.5*(uStored[i]+uPlus1[i]) - 0.5 * (dt / dx) * (fluxes[i-nGhost+1] - fluxes[i-nGhost]); // flux[i + 1] and flux[i] for the update
+    }
+    u = uPlus1;
+    transmissiveBC();
+
+}
+
 
 // ---------------- Source Terms ---------------------------- //
 
@@ -253,16 +267,37 @@ std::vector< std::array<double,5> > solver::sourceTerm(const std::vector< std::a
     return sourceResult;
 }
 
-void solver::allaireSource(){
-    transmissiveBC();
+void solver::allaireSource(double timestep){
+
     for (std::vector<double>::size_type i = nGhost; i < u.size() - nGhost; ++i) {
-        //double sDiff = (u[i][XMOM]<0) ? (sStars[i-nGhost+1]-sStars[i-nGhost]) : (sStars[i-nGhost+2]-sStars[i-nGhost+1]);
-        uPlus1[i][FRAC] = u[i][FRAC] + (dt/dx) * uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]); // flux[i + 1] and flux[i] for the update
-        //std::cout << u[i][FRAC] << " " << uPrev[i][FRAC] << " " << sStars[i-nGhost+1] << " " << sStars[i-nGhost] << " " << (sStars[i-nGhost+1]-sStars[i-nGhost]) << " " << (dt/dx) * uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]) << std::endl;
+        
+        // Murrone & guillard source term (compaction)
+        /*
+        std::array<double,5> uPrevPrim = eos[0]->consvToPrim(uPrev[i]);
+        double r1 = uPrevPrim[1]/uPrevPrim[0];
+        double r2 = uPrevPrim[2]/(1-uPrevPrim[0]);
+
+        auto sgPtr = dynamic_cast<stiffenedGas*>(eos[0]);
+        double cs1 = (eos[0]->get_gamma()[0]*(uPrevPrim[4]+sgPtr->get_pInf()[0])/(uPrevPrim[1]/uPrevPrim[0]));
+        double cs2 = (eos[0]->get_gamma()[1]*(uPrevPrim[4]+sgPtr->get_pInf()[1])/(uPrevPrim[2]/(1-uPrevPrim[0])));
+
+        double pref = uPrevPrim[0]*(1-uPrevPrim[0])*(r2*cs2-r1*cs1)/(uPrevPrim[1]*cs1+uPrevPrim[2]*cs2);
+
+        uPlus1[i][FRAC] = u[i][FRAC] + (timestep/dx) * pref * (sStars[i-nGhost+1]-sStars[i-nGhost]); // flux[i + 1] and flux[i] for the update
+        */
+
+        // Original allaire source term
+        uPlus1[i][FRAC] = u[i][FRAC] + (timestep/dx) * uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]); // flux[i + 1] and flux[i] for the update
+
+        // Heun's method with Allaire source term
+        //double K1 = (timestep/dx)* uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]);
+        //double K2 = (timestep/dx)* (uPrev[i][FRAC] + K1) * (sStars[i-nGhost+1]-sStars[i-nGhost]);
+        //uPlus1[i][FRAC] = u[i][FRAC] + 0.5*(K1+K2);
 
     }
     
     u = uPlus1;
+    transmissiveBC();
 }
 
 // -------------------- Flux functions --------------------- //
@@ -278,7 +313,8 @@ std::array<double,5> solver::fBurgersLF(const std::array<double,5> x)const{
 
 std::array<double,5> solver::fEuler(std::array<double,5> arr, EOS* eos){ // takes primitive variables
     std::array<double,5> result;
-    result[FRAC] = arr[FRAC]*arr[UX]; // vol fraction 
+    //result[FRAC] = arr[FRAC]*arr[UX]; // vol fraction 
+    result[FRAC] = 0;
     result[RHO1] = arr[RHO1]*arr[UX]; // rho1*v
     result[RHO2] = arr[RHO2]*arr[UX]; // rho2*v
     result[XMOM] = (arr[RHO1]+arr[RHO2])*arr[UX]*arr[UX] + arr[PRES]; // rho*v^2 + p
@@ -372,9 +408,9 @@ std::array<double,5> solver::calcSlope(double omega, std::array<double,5> slopel
 };
 
 std::array<double,5> solver::minbee(std::array<double,5> slp){
-    std::array<double,5> minbArr{0,0,0};
+    std::array<double,5> minbArr{0,0,0,0,0};
     double minb;
-    for (int k = 0; k<4; ++k){
+    for (int k = 0; k<5; ++k){
         if (slp[k] <= 0 || slp[k] == INFINITY){
             minb = 0;
         } else if (slp[k] > 1){
@@ -387,14 +423,14 @@ std::array<double,5> solver::minbee(std::array<double,5> slp){
     auto minminB = std::min_element(minbArr.begin(),minbArr.end());
     double minBval = *minminB;
     //return {minbArr[3],minbArr[3],minbArr[3],minbArr[3]};
-    return {minBval,minBval,minBval,minBval};
-    //return minbArr;
+    //return {minBval,minBval,minBval,minBval};
+    return minbArr;
 };
 
 std::array<double,5> solver::superbee(std::array<double,5> slp){
-    std::array<double,5> minbArr{0,0,0};
+    std::array<double,5> minbArr{0,0,0,0,0};
     double minb;
-    for (int k = 0; k<4; ++k){
+    for (int k = 0; k<5; ++k){
         if (slp[k] <= 0 || slp[k] == INFINITY){
             minb = 0;
         } else if (slp[k] <= 0.5){
@@ -416,8 +452,8 @@ std::array<double,5> solver::superbee(std::array<double,5> slp){
 
 
 std::array<double,5> solver::vanLeer(std::array<double,5> slp){
-    std::array<double,5> minbArr{0,0,0};
-    for (int k = 0; k<4; ++k){
+    std::array<double,5> minbArr{0,0,0,0,0};
+    for (int k = 0; k<5; ++k){
         if (slp[k] <= 0 || slp[k] == INFINITY){
             minbArr[k] = 0;
         } else {
@@ -427,8 +463,8 @@ std::array<double,5> solver::vanLeer(std::array<double,5> slp){
     auto minminB = std::min_element(minbArr.begin(),minbArr.end());
     double minBval = *minminB;
     //return {minbArr[3],minbArr[3],minbArr[3],minbArr[3]};
-    //return minbArr;
-    return {minBval,minBval,minBval,minBval};
+    return minbArr;
+    //return {minBval,minBval,minBval,minBval};
 };
 
 
@@ -453,8 +489,7 @@ void solver::setDt(){
     double aMax = -1e14;
     std::cout << "setting dt" << std::endl;
     for (std::vector<double>::size_type i = nGhost; i < u.size()-nGhost; ++i) {
-        //std::cout << "sound speed " << eos[0]->calcSoundSpeed(u[i]) << std::endl;
-        aMax = std::max(aMax, std::abs(eos[0]->consvToPrim(u[i])[UX]) + eos[0]->calcSoundSpeed(u[i]));
+        aMax = std::max(aMax, std::abs(eos[0]->consvToPrim(u[i])[UX]) + eos[0]->calcSoundSpeed(eos[0]->consvToPrim(u[i])));
     }
     dt = cour * dx / std::fabs(aMax);
 
@@ -492,7 +527,7 @@ solver::solver(double x_0, double x_1, double t0, double t1, int n_Cells, int n_
     assert(t1>t0);
     x0 = x_0; x1 = x_1;
     startTime = t0; endTime = t1;
-    timeMulti = 1; // 1.0/(endTime-startTime);
+    timeMulti = (endTime-startTime <= 1e-3) ? 1000 : 1; // 1.0/(endTime-startTime);
     nCells = n_Cells;
     nGhost = n_Ghosts;
     dx = (x1 - x0)/nCells;

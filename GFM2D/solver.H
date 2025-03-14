@@ -18,7 +18,7 @@ class solver{
 
         std::vector<std::string> variables;
 
-        void init(std::vector< std::vector< std::array<double,4> > >, fluid& fluid);\
+        void init(std::vector< std::vector< std::array<double,4> > >, fluid& fluid);
         void phiInit(std::vector< std::vector < double > >);
 
         // GFM

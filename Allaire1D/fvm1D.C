@@ -12,16 +12,16 @@
 
 
 int main(){
-    int nCells = 200;
-    double x0{0}, x1{1};
-    double startTime = 0.0, endTime = 0.3;
+    int nCells = 1000;
+    double x0{-2}, x1{2};
+    double startTime = 0.0, endTime = 900e-6;  
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
 
     // construct EOS object and give to sovler
-    //stiffenedGas stiffgas(7.15,3e8,0);
-    idealGas idgas1(1.4,1.67); idealGas idgas2(1.67,1.67);
+
+    stiffenedGas idgas1(4.4,1.4,6e8,0); idealGas idgas2(1.67,1.67);
     std::array<EOS*,2> materials = {&idgas1,&idgas2};
     solver sim(x0,x1,startTime,endTime,nCells,2,cour);
     sim.setEOS(materials);
@@ -34,7 +34,7 @@ int main(){
     sim.dirName = dirname;
 
 
-    sim.setWriteInterval(0.01);
+    sim.setWriteInterval(100e-6);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,5> input, EOS* eos){
@@ -56,15 +56,6 @@ int main(){
     for (std::vector<double>::size_type i=sim.ghosts(); i<uInit.size()-sim.ghosts();i++){
         double discPos = 0.5;
         double x = x0 + (i-sim.ghosts()+0.5)*sim.get_dx();
-        /*
-        if (x <= 0.05){
-            uInit[i] = sim.eos[0]->primToConsv({1,1.3333,0.3535*sqrt(1e5),1.5e5});
-        } else if (x <= discPos && x > 0.05){
-            uInit[i] = sim.eos[0]->primToConsv({1,1,0,1e5});
-        } else {
-            uInit[i] = sim.eos[0]->primToConsv({1,1,0,1});
-        }
-        */
 
         // Toro tests //
 
@@ -78,8 +69,8 @@ int main(){
         }
         */
 
-        // air-helium (wangB)
-        
+        // air-helium (wang B)
+        /*
         double vf{1-(1e-6)}, rho1{1.3765}, rho2{0.1380};
 
         if (x < 0.25){
@@ -90,6 +81,18 @@ int main(){
             uInit[i] = sim.eos[0]->primToConsv({1-vf,(1-vf),rho2*vf,0,1});
         } else {
             uInit[i] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,1});
+        }
+            */
+            
+
+        //  Murrone & Guillard
+        
+        double vf{1-(1e-8)}, rho1{1000}, rho2{50};
+
+        if (x < 0.7){
+            uInit[i] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),0,1e9});
+        } else {
+            uInit[i] = sim.eos[0]->primToConsv({1-vf,rho1*(1-vf),rho2*vf,0,1e5});
         }
         
             

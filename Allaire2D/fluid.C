@@ -19,6 +19,12 @@ fluid::fluid(int nX, int nY, int nG)
 
         resizeVector(sStarsY,nCellsY+1,nCellsX);
         resizeVector(fluxesY,nCellsY+1,nCellsX);
+        resizeVector(halfSlopesY,nCellsY+3,nCellsX);
+        resizeVector(rY,nCellsY+2,nCellsX);
+        resizeVector(uBarLY,nCellsY+2,nCellsX);
+        resizeVector(uBarRY,nCellsY+2,nCellsX);
+        resizeVector(uBarLupdY,nCellsY+2,nCellsX);
+        resizeVector(uBarRupdY,nCellsY+2,nCellsX);
         
 
 }

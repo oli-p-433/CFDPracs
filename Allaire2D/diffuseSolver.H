@@ -28,24 +28,27 @@ class solver{
         std::array<double,6> fEuler(std::array<double,6>, EOS*,bool);
         void Richt();
         void FORCE();
-        void SLIC();
-        void MUSCL();
+        void SLIC(bool);
+        void MUSCL(bool);
         void HLLCGodunov(bool);
+
+        bool isGodunov;
 
         std::function<void(bool)> fluxMethod;
 
         std::array<double,6> HLLC(std::array<double,6>,std::array<double,6>, EOS*, int, int, bool);
-        std::array<double,6> laxFhalf(const std::array<double,6>, const std::array<double,6>, EOS* eos)const;
-        std::array<double,6> LF(const std::array<double,6>, const std::array<double,6>, EOS* eos)const;
+        std::array<double,6> laxFhalf(const std::array<double,6>, const std::array<double,6>, EOS*, bool)const;
+        std::array<double,6> LF(const std::array<double,6>, const std::array<double,6>, EOS*, bool)const;
         void pointsUpdate(bool);
+        void RK2(bool);
         void run();
 
         // slope limiting
-        void calcHalfSlopes(bool);
-        void calcr();
+        void calcHalfSlopes(bool,bool);
+        void calcr(bool);
         std::array<double,6> static calcSlope(double omega, std::array<double,6> slopeleft, std::array<double,6> sloperight);
-        void calcUBars(bool);
-        void updUBars(bool);
+        void calcUBars(bool,bool);
+        void updUBars(bool,bool);
         std::function<std::array<double,6>(std::array<double,6>)> slopeLim;
         
         std::array<double,6> minbee(std::array<double,6>);
@@ -118,7 +121,7 @@ class solver{
 
         double cSound;
 
-        
+        int splitFlip{0};
 
         std::vector< std::array<double,6> > sourceResult;
 
@@ -132,5 +135,7 @@ class solver{
         double cour;
 
         double writeInterval;
+
+        double dtReducer = 1;
 };
 

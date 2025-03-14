@@ -43,6 +43,7 @@ class solver{
         std::array<double,5> laxFhalf(const std::array<double,5>, const std::array<double,5>, EOS* eos)const;
         std::array<double,5> LF(const std::array<double,5>, const std::array<double,5>, EOS* eos)const;
         void pointsUpdate();
+        void RK2();
         void run();
 
         // slope limiting
@@ -90,7 +91,7 @@ class solver{
         // Source terms
 
         void sourceUpdate();
-        void allaireSource();
+        void allaireSource(double);
         std::vector< std::array<double,5> > sourceTerm(const std::vector< std::array<double,5> > uVals, int);
         int alpha;
 

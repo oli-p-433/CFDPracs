@@ -14,18 +14,25 @@
 
 
 int main(){
-    int nCellsX = 325; // 325
-    int nCellsY = 90; // 90
+    // int nCellsX = 325; // 325
+    // int nCellsY = 90; // 90
+    // int nGhost = 2;
+    // double x0{0}, x1{0.325}; // 0.325
+    // double y0{-0.045}, y1{0.045}; // 0.09
+    // double startTime = 0.0, endTime = 0.3;
+
+    int nCellsX = 100; // 325
+    int nCellsY = 100; // 90
     int nGhost = 2;
-    double x0{0}, x1{0.325}; // 0.325
-    double y0{-0.045}, y1{0.045}; // 0.09
+    double x0{-0.5}, x1{0.5}; // 0.325
+    double y0{-0.5}, y1{0.5}; // 0.09
     double startTime = 0.0, endTime = 0.25;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
 
     // constructing EOS objects
-    idealGas idgas1(1.4); idealGas idgas2(1.67);
+    idealGas idgas1(1.4); idealGas idgas2(1.4);
     std::array<EOS*,2> materials = {&idgas1,&idgas2};
 
     solver sim(x0,x1,y0,y1,startTime,endTime,nCellsX,nCellsY,nGhost,cour,1.4);
@@ -46,7 +53,7 @@ int main(){
         std::filesystem::create_directory(name);
     }
 
-    sim.setWriteInterval(0.001);
+    sim.setWriteInterval(0.01);
 
     // Set the flux function
     sim.flux = [&sim](std::array<double,4> input, EOS* eos){
@@ -66,15 +73,15 @@ int main(){
     };
 
     sim.setBCs = [&sim](fluid& f) {
-        sim.get_boundary().reflectiveTopBC(f);
-        sim.get_boundary().reflectiveBottomBC(f);
+        sim.get_boundary().transmissiveTopBC(f);
+        sim.get_boundary().transmissiveBottomBC(f);
         sim.get_boundary().transmissiveLeftBC(f);
         sim.get_boundary().transmissiveRightBC(f);
         // 1st bool: left/right reflective, 2nd bool: top/bottom reflective
-        sim.get_boundary().updateBottomLeftCorner(f,false,true);
-        sim.get_boundary().updateTopRightCorner(f,false,true);
-        sim.get_boundary().updateBottomRightCorner(f,false,true);
-        sim.get_boundary().updateTopLeftCorner(f,false,true);
+        sim.get_boundary().updateBottomLeftCorner(f,false,false);
+        sim.get_boundary().updateTopRightCorner(f,false,false);
+        sim.get_boundary().updateBottomRightCorner(f,false,false);
+        sim.get_boundary().updateTopLeftCorner(f,false,false);
     };
 
     std::vector< std::vector<std::array<double,4>>> uInit1, uInit2;
@@ -92,22 +99,23 @@ int main(){
             //std::cout << x << " " << y << std::endl;
             
             // RIEMANN PROBLEMS //
-            /*
+            
             // toro3 -- 1.0,0.0,0.0,1000 -- 1.0, 0.0, 0.0, 0.01
             // toro5 -- 5.99924,0,19.5975,460.894 -- 5.99242,0,-6.19633,46.0950
             //phiInit[i][j] = (y + x)/sqrt(2);
-            phiInit[i][j] = (y-x)/sqrt(2);
-
-            //phiInit[i][j] = y - 0.5;
+            //phiInit[i][j] = (y-x)/sqrt(2);
+            
+            phiInit[i][j] = y;
                         
-            if (x+y<0){
-                uInit1[i][j] = sim.set_vals(1,0,-2,0.4); // 1,0.0,0.0,1 -- 0.125,0.0,0,0.1 -- toro1
-                uInit2[i][j] = sim.set_vals(1,0,2,0.4); // 1,0,-2,0.4 -- 1,0,2,0.4 -- toro2
+            if (y<0){
+                uInit1[i][j] = sim.set_vals(1,0.0,0.0,1); // 1,0.0,0.0,1 -- 0.125,0.0,0,0.1 -- toro1
+                uInit2[i][j] = sim.set_vals(1,0.0,0.0,1); // 1,0,-2,0.4 -- 1,0,2,0.4 -- toro2
             } else {
-                uInit1[i][j] = sim.set_vals(1,0,-2,0.4);
-                uInit2[i][j] = sim.set_vals(1,0,2,0.4);
+                uInit1[i][j] = sim.set_vals(0.125,0.0,0,0.1);
+                uInit2[i][j] = sim.set_vals(0.125,0.0,0,0.1);
             }
-            */
+            
+            
 
             //  -- CYlindrical Sod -- //
             /*
@@ -194,22 +202,19 @@ int main(){
             
             // SHOCK-BUBBLE TEST //
             
-            phiInit[i][j] = -(sqrt((x-0.15)*(x-0.15)+(y)*(y))-0.025);
+            // phiInit[i][j] = -(sqrt((x-0.15)*(x-0.15)+(y)*(y))-0.025);
             
-            // sod (x-1)*(x-1)+(y-1)*(y-1) < 0.4*0.4
-            if ((x-0.15)*(x-0.15)+(y*y) < 0.025*0.025){
-                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
-                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
-                //phiInit[i][j] = 1e2;
-            } else if (x<=0.1){
-                uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-                uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-                //phiInit[i][j] = -1e2;
-            } else {
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
-                //phiInit[i][j] = -1e2;
-            }
+            // if ((x-0.15)*(x-0.15)+(y*y) < 0.025*0.025){
+            //     uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
+            //     uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
+            // } else if (x<=0.1){
+            //     uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+            //     uInit2[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+            // } else {
+            //     uInit1[i][j] = sim.set_vals(1,0,0,1);
+            //     uInit2[i][j] = sim.set_vals(1,0,0,1);
+            // }
+            
                 
             
             

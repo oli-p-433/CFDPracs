@@ -1384,7 +1384,7 @@ void solver::MUSCL(fluid& fluid, EOS* eos){
             }
         }
     } else if (direction == YDIR){
-        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) { // why am i getting a Y flux of vx? 
+        for (size_t i = 0; i < fluid.fluxesY.size(); ++i) {
             for (size_t j = 0; j < fluid.fluxesY[0].size(); ++j) {
                 fluid.fluxesY[i][j] = fluxRiemannSolver(fluid.uBarRY[i][j+1],fluid.uBarLY[i+1][j+1],eos);
                 //fluid.fluxesY[i][j] = HLLC(fluid.uBarRY[i][j],fluid.uBarLY[i+1][j],eos);

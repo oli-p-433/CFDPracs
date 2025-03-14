@@ -81,6 +81,7 @@
         "operators.C": "cpp",
         "*.ipp": "cpp",
         "boundary.C": "cpp",
-        "diffuseSolver.C": "cpp"
+        "diffuseSolver.C": "cpp",
+        "GFMSolver.C": "cpp"
     }
 }

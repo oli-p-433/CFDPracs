@@ -41,4 +41,6 @@ class stiffenedGas : public EOS {
         std::array<double,5> consvToPrim(const std::array<double,5>&)const override;
 
         stiffenedGas(double,double,double,double,double e_inf1 = 0, double e_inf2 = 0);
+
+        std::array<double,2> get_pInf();
 };
