@@ -12,7 +12,7 @@
 
 
 int main(){
-    int nCells = 200;
+    int nCells = 400;
     double x0{0}, x1{1};
     double startTime = 0.0, endTime = 0.15;
 
@@ -48,7 +48,7 @@ int main(){
     }; // because fEuler isnt static
 
     sim.slopeLim = [&sim](std::array<double,3> input){
-        return sim.minbee(input);
+        return sim.vanLeer(input);
     }; // because fEuler isnt static
 
     std::vector<std::array<double,3>> u1Init; u1Init.resize(sim.u1Plus1.size());

@@ -238,6 +238,7 @@ void riemann::exactRiemannSolution(double pStar, double x_disc){
     for (size_t i=0; i<wavePos.size();++i){
         std::cout << wavePos[i] << " ";
     };
+    std::cout << std::endl;
     
     std::vector< std::array<double,3> > uRiem;
     uRiem.resize(nCells);
@@ -272,7 +273,17 @@ void riemann::exactRiemannSolution(double pStar, double x_disc){
     std::cout << "printing dp #0" << std::endl;
     std::cout << uRiem[0][0] << " " << uRiem[0][1] << " " << uRiem[0][2] << " " << std::endl; 
 
-    writeData("rhoExact",uRiem); writeData("vExact",uRiem); writeData("pExact",uRiem);
+    std::vector<double> eExact;
+    for (size_t i = 0; i<uRiem.size(); ++i){
+        double x = x0 + (i+0.5)*dx;
+        if (x <= wavePos[2]){
+            eExact.push_back(uRiem[i][2]/(uRiem[i][0]*(gamma(0)-1)));
+        } else {
+            eExact.push_back(uRiem[i][2]/(uRiem[i][0]*(gamma(1)-1)));
+        }
+    }
+
+    writeData("rhoExact",uRiem); writeData("vExact",uRiem); writeData("pExact",uRiem), writeEne(eExact);
 };
 
 void riemann::writeData(std::string varName, std::vector<std::array<double,3>> data) const{
@@ -294,6 +305,28 @@ void riemann::writeData(std::string varName, std::vector<std::array<double,3>> d
         }else{
             std::cout << "failed to write." << std::endl;
         }
+
+}
+
+void riemann::writeEne(std::vector<double> data) const{
+    // making data file
+    std::string filename = dirName + "/eExact";
+    std::cout << filename << std::endl;
+    std::ofstream writeFile(filename);
+    assert(writeFile.is_open());
+    if (writeFile.is_open()){
+        // writing data
+        for (std::vector<double>::size_type i=0; i<data.size();i++){
+            double x = x0 + (i+0.5)*dx;
+
+            writeFile << x << " " << data[i] << std::endl; //consvToPrim(data[i],x<=wavePos[2])
+            //std::cout << u[i] << " ";
+        }
+        writeFile.close();
+        std::cout << filename << "written successfully" << std::endl;
+    }else{
+        std::cout << "failed to write." << std::endl;
+    }
 
 }
 

@@ -87,6 +87,9 @@ class solver{
         void reinitPhiIterative();
         void solveEikonalPoint(int,int);
 
+        void updateLevelSetPoint(std::vector<std::vector<double>> &phi, int i, int j);
+        void reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int maxIter);
+
         void neighbourAvg(fluid& f, int, int);
         std::array<double,4> neighbourAvgInterp(fluid& f, int, int);
         void fixFreshlyCleared();

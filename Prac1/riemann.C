@@ -11,13 +11,13 @@
 int main(){
 
     // set states
-    std::array<double,3> sL = {1,-2,0.4};//{1000,0,1e9};
+    std::array<double,3> sL = {1.0,0.0,1000};//{1000,0,1e9};
     double gamma1 = 1.4;
 
-    std::array<double,3> sR = {1,2,0.4}; // {50,0,1e5};
+    std::array<double,3> sR = {1.0, 0.0, 0.01}; // {50,0,1e5};
     double gamma2 = 1.4;
 
-    double time = 0.25;
+    double time = 0.012;
     double discPosition = 0.5;
 
     riemann solution(gamma1,gamma2,sL,sR,0,1,discPosition,time,100,0,0);

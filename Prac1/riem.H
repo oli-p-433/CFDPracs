@@ -32,6 +32,7 @@ class riemann{
         std::map<std::string,int> varMap;
 
         void writeData(std::string, std::vector<std::array<double,3>>) const;
+        void writeEne(std::vector<double>) const;
 
         // converters
 

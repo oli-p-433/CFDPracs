@@ -18,10 +18,16 @@ int main(){
     // double x0{-0.5}, x1{0.5}, y0{-0.5}, y1{0.5};
     // double startTime = 0.0, endTime = 0.25;
     
-    int nCellsX = 650;
-    int nCellsY = 180;
+    int nCellsX = 325;
+    int nCellsY = 90;
+
     double x0{0}, x1{0.325}, y0{-0.045}, y1{0.045};
-    double startTime = 0.0, endTime = 0.50;
+    double startTime = 0.0, endTime = 900e-6;
+
+    // int nCellsX = 1000;
+    // int nCellsY = 1;
+    // double x0{0}, x1{1}, y0{-0.5/nCellsX}, y1{0.5/nCellsX};
+    // double startTime = 0.0, endTime = 200e-6;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
@@ -43,18 +49,18 @@ int main(){
     sim.dirName = dirname;
 
 
-    sim.setWriteInterval(0.001);
+    sim.setWriteInterval(10e-6);
 
     sim.setBCs = [&sim](fluid& f) {
-        sim.get_boundary().reflectiveTopBC(f);
-        sim.get_boundary().reflectiveBottomBC(f);
+        sim.get_boundary().transmissiveTopBC(f);
+        sim.get_boundary().transmissiveBottomBC(f);
         sim.get_boundary().transmissiveLeftBC(f);
         sim.get_boundary().transmissiveRightBC(f);
         // 1st bool: left/right = IS reflective, 2nd bool: top/bottom = IS reflective
-        sim.get_boundary().updateBottomLeftCorner(f,false,true);
-        sim.get_boundary().updateTopRightCorner(f,false,true);
-        sim.get_boundary().updateBottomRightCorner(f,false,true);
-        sim.get_boundary().updateTopLeftCorner(f,false,true);
+        sim.get_boundary().updateBottomLeftCorner(f,false,false);
+        sim.get_boundary().updateTopRightCorner(f,false,false);
+        sim.get_boundary().updateBottomRightCorner(f,false,false);
+        sim.get_boundary().updateTopLeftCorner(f,false,false);
     };
 
     std::cout << "set BCs successfully" << std::endl;
@@ -65,10 +71,10 @@ int main(){
     }; // because fEuler isnt static
 
     sim.slopeLim = [&sim](std::array<double,4> input){
-        return sim.vanLeer(input);
+        return sim.minbee(input);
     }; // because fEuler isnt static
 
-    sim.PRIM = false;
+    sim.PRIM = true; // primitive or conserved variable slope limiting
     sim.fluxMethod = [&sim](bool direction, fluid& f, EOS* eos) {
         sim.MUSCL(direction,f,eos); // Change this to sim.SLIC or sim.godunov as needed
     };
@@ -94,9 +100,9 @@ int main(){
             //phiInit[i][j] = (y-x)/sqrt(2);
 
             
-            // phiInit[i][j] = x;
+            // phiInit[i][j] = x-0.5;
                         
-            // if (x<0){
+            // if (x<0.5){
             //     uInit1[i][j] = sim.set_vals(FLUID1,1,0.0,0.0,1); // 1,0.0,0.0,1 -- 0.125,0.0,0,0.1 -- toro1
             //     uInit2[i][j] = sim.set_vals(FLUID2,1,0.0,0.0,1); // 1,0,-2,0.4 -- 1,0,2,0.4 -- toro2
             // } else {
@@ -125,6 +131,8 @@ int main(){
             // ----------------- //
 
             // WANG TEST B
+            
+            //2D:
             /*
             if (x+y < 1){
                 phiInit[i][j] = (y + x - (1-0.1*sqrt(2)))/sqrt(2);
@@ -137,39 +145,117 @@ int main(){
             
             
             if (x+y <= (1-0.25*sqrt(2))){
-                uInit1[i][j] = sim.set_vals(1.3765,0.3948/sqrt(2),0.3948/sqrt(2),1.57);
-                uInit2[i][j] = sim.set_vals(1.3765,0.3948/sqrt(2),0.3948/sqrt(2),1.57);
+                uInit1[i][j] = sim.set_vals(FLUID1, 1.3765,0.3948/sqrt(2),0.3948/sqrt(2),1.57);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.3765,0.3948/sqrt(2),0.3948/sqrt(2),1.57);
             } else if (x+y <= (1-sqrt(2)*0.1) && x+y > (1-0.25*sqrt(2))){
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
+                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1);
+                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1);
             } else if (x+y <= (1+0.1*sqrt(2)) && x+y > (1-sqrt(2)*0.1)){
-                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
-                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
+                uInit1[i][j] = sim.set_vals(FLUID1,0.1380,0,0,1);
+                uInit2[i][j] = sim.set_vals(FLUID2,0.1380,0,0,1);
             } else {
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
+                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1);
+                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1);
             }
-            */
+                */
+
+            // // Define the rotation angle in radians (35 degrees)
+            // double theta = 35.0 * M_PI / 180.0;
+            // // Compute the projection along the interface normal (rotated by 35°)
+            // double p = x * cos(theta) + y * sin(theta);
+
+            // // Set the level-set variable (phi) with a smeared interface centered at p = 1
+            // if (p < 1) {
+            //     phiInit[i][j] = p - (1 - 0.1);
+            // } else {
+            //     phiInit[i][j] = -(p - (1 + 0.1));
+            // }
+
+            // // Set the initial velocity fields based on the location relative to the interface
+            // if (p <= (1 - 0.25)) {
+            //     uInit1[i][j] = sim.set_vals(FLUID1, 1.3333, 0.3535*sqrt(1e5) * cos(theta), 0.3535*sqrt(1e5) * sin(theta), 1.5e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2, 1.3333, 0.3535*sqrt(1e5) * cos(theta), 0.3535*sqrt(1e5) * sin(theta), 1.5e5);
+            // } else if (p <= (1 - 0.1) && p > (1 - 0.25)) {
+            //     uInit1[i][j] = sim.set_vals(FLUID1, 1, 0, 0, 1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2, 1, 0, 0, 1e5);
+            // } else if (p <= (1 + 0.1) && p > (1 - 0.1)) {
+            //     uInit1[i][j] = sim.set_vals(FLUID1, 0.1379,0,0,1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2, 0.1379,0,0,1e5);
+            // } else {
+            //     uInit1[i][j] = sim.set_vals(FLUID1, 1, 0, 0, 1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2, 1, 0, 0, 1e5);
+            // }
+                
             
+            //1D:
             /*
-            if (y <= 0.25){
-                uInit1[i][j] = sim.set_vals(1.3765,0.3948/sqrt(2),0.3948/sqrt(2),1.57);
-                uInit2[i][j] = sim.set_vals(1.3765,0.3948/sqrt(2),0.3948/sqrt(2),1.57);
-            } else if (y <= 0.4 && y > 0.25){
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
-            } else if (y <= 0.6 && y > 0.4){
-                uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
-                uInit2[i][j] = sim.set_vals(0.1380,0,0,1);
+            if (x<0.5){
+                phiInit[i][j] = (x-0.4);
             } else {
-                uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit2[i][j] = sim.set_vals(1,0,0,1);
+                phiInit[i][j] = (0.6-x);
             }
-            */
+            
+            if (x<=0.05){
+                uInit1[i][j] = sim.set_vals(FLUID1,1.3333,0.3535*sqrt(1e5),0,1.5e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.3333,0.3535*sqrt(1e5),0,1.5e5);
+            } else if (x <= 0.4){
+                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1e5); 
+            } else if (x <= 0.6){
+                uInit1[i][j] = sim.set_vals(FLUID1,0.1379,0,0,1e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,0.1379,0,0,1e5);
+            } else {
+                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1e5);
+            }
+                */
+            
+            // Mach 20 shock //
+
+            //1D:
+            
+            // if (x<0.5){
+            //     phiInit[i][j] = (x-0.4);
+            // } else {
+            //     phiInit[i][j] = (0.6-x);
+            // }
+            
+            // if (x<=0.05){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,5.92593,6220.51,0,4.665e7);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,5.92593,6220.51,0,4.665e7);
+            // } else if (x <= 0.4){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1e5); 
+            // } else if (x <= 0.6){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,0.1379,0,0,1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,0.1379,0,0,1e5);
+            // } else {
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1e5);
+            // }
+                
+    
+            
             
             
 
             // ----------------- //
+
+            // ---------- Fedkiw B ---------- //
+            /*
+            phiInit[i][j] = x-0.5;
+            
+            if (x<=0.05){
+                uInit1[i][j] = sim.set_vals(FLUID1,1.3333,0.3535*sqrt(1e5),0,1.5e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.3333,0.3535*sqrt(1e5),0,1.5e5);
+            } else if (x <= 0.5){
+                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1e5); 
+            } else {
+                uInit1[i][j] = sim.set_vals(FLUID1,0.1379,0,0,1e5);
+                uInit2[i][j] = sim.set_vals(FLUID2,0.1379,0,0,1e5);
+            }
+                */
             
             
 
@@ -191,19 +277,36 @@ int main(){
             
             // SHOCK-BUBBLE TEST //
             
-            phiInit[i][j] = -(sqrt((x-0.15)*(x-0.15)+(y)*(y))-0.025);
+            //phiInit[i][j] = -(sqrt((x-0.15)*(x-0.15)+(y)*(y))-0.025);
             
-            if ((x-0.15)*(x-0.15)+(y*y) < 0.025*0.025){
-                uInit1[i][j] = sim.set_vals(FLUID1,0.1380,0,0,1);
-                uInit2[i][j] = sim.set_vals(FLUID2,0.1380,0,0,1);
-            } else if (x<=0.1){
-                uInit1[i][j] = sim.set_vals(FLUID1,1.3765,0.3948,0,1.57);
-                uInit2[i][j] = sim.set_vals(FLUID2,1.3765,0.3948,0,1.57);
-            } else {
-                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1);
-                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1);
+            // if ((x-0.15)*(x-0.15)+(y*y) < 0.025*0.025){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,0.1380,0,0,1);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,0.1380,0,0,1);
+            // } else if (x<=0.1){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1.3765,0.3948,0,1.57);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1.3765,0.3948,0,1.57);
+            // } else {
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1);
 
+            // }
+
+            // Haas-Sturtevant Shock Bubble
+            
+            phiInit[i][j] = -(sqrt((x-0.175)*(x-0.175)+(y)*(y))-0.025);
+            
+            if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
+                uInit1[i][j] = sim.set_vals(FLUID1,0.223,0,0,101325);
+                uInit2[i][j] = sim.set_vals(FLUID2,0.223,0,0,101325);
+            } else if (x>=0.225){
+                uInit1[i][j] = sim.set_vals(FLUID1,1.686,-113.5,0,159060);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.686,-113.5,0,159060);
+            } else {
+                uInit1[i][j] = sim.set_vals(FLUID1,1.225,0,0,101325);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.225,0,0,101325);
             }
+                
+
                 
                 
                 

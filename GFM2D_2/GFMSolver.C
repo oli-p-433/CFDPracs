@@ -89,10 +89,10 @@ void solver::run(){
 
         //time = 0.0;
         
-        if (splitFlip % 5 == 0){
+        if (splitFlip % 1 == 0){
            phiBC();
-           reinitPhiFastSweeping(10);
-           std::cout << "phi reinitialised" << std::endl;
+           reinitialiseLevelSet(phi,2);
+           //std::cout << "phi reinitialised" << std::endl;
         }
         
         splitFlip++;
@@ -413,8 +413,8 @@ void solver::calcInterface(fluid& f){
         //std::cout << "interface position " << x << " " << y << std::endl;
 
         // lPos always in fluid1, rPos always in fluid2
-        std::array<double,2> lPos = {x-1*dx*f.interfaceNormals[i][0],y-1*dy*f.interfaceNormals[i][1]};
-        std::array<double,2> rPos = {x+1*dx*f.interfaceNormals[i][0],y+1*dy*f.interfaceNormals[i][1]};
+        std::array<double,2> lPos = {x-1.5*dx*f.interfaceNormals[i][0],y-1.5*dy*f.interfaceNormals[i][1]};
+        std::array<double,2> rPos = {x+1.5*dx*f.interfaceNormals[i][0],y+1.5*dy*f.interfaceNormals[i][1]};
         //std::cout << "left interface position " << lPos[0] << " " << lPos[1] << std::endl;
         //std::cout << "right interface position " << rPos[0] << " " << rPos[1] << std::endl;
         f.interfacePositions[i] = {lPos,rPos};
@@ -632,7 +632,7 @@ std::array<double,4> solver::bilinear4(double x, double y, fluid& fluid, std::ar
     int j = static_cast<int>(std::round(jdub));
     int i = static_cast<int>(std::round(idub));
 
-    // --- (a) Symmetric neighbor selection ---
+    // --- selection of interpolation points in the normal direction ---
     int jR, iR;
     if (fl1 == 1) {
         // For fluid2 (real when phi > 0): use positive offset if normal component is >= 0
@@ -1385,7 +1385,6 @@ std::array<double,4> solver::HLLC(std::array<double,4> left,std::array<double,4>
     SL = LPrim[UX] - eos->calcSoundSpeed(LPrim)*qL;
     SR = RPrim[UX] + eos->calcSoundSpeed(RPrim)*qR;
     */
-
     // easy wavespeed
     SL = (direction == XDIR) ? std::min(LPrim[UX] - eos->calcSoundSpeed(LPrim), RPrim[UX] - eos->calcSoundSpeed(RPrim)) : std::min(LPrim[UY] - eos->calcSoundSpeed(LPrim), RPrim[UY] - eos->calcSoundSpeed(RPrim));
     SR = (direction == XDIR) ? std::max(LPrim[UX] + eos->calcSoundSpeed(LPrim), RPrim[UX] + eos->calcSoundSpeed(RPrim)) : std::max(LPrim[UY] + eos->calcSoundSpeed(LPrim), RPrim[UY] + eos->calcSoundSpeed(RPrim));
@@ -1899,6 +1898,133 @@ void solver::solveEikonalPoint(int i, int j){
 }
 
 
+// Update the level-set value at an interior grid point (i,j).
+// This routine computes a new candidate value for phi[i][j] by solving
+// the quadratic equation derived from approximating |∇φ| = 1 using
+// upwind differences. The neighbors are chosen based on the sign of φ.
+void solver::updateLevelSetPoint(std::vector<std::vector<double>> &phi, int i, int j) {
+    // Determine the sign of the current value
+    int s = sign(phi[i][j]);
+
+    // For reinitialization we choose neighboring values using upwinding.
+    // For φ > 0, use the minimum of neighboring values;
+    // for φ < 0, use the maximum.
+    double a, b;
+    if (s > 0) {
+        b = std::min(phi[i - 1][j], phi[i + 1][j]);
+        a = std::min(phi[i][j - 1], phi[i][j + 1]);
+    } else {
+        b = std::max(phi[i - 1][j], phi[i + 1][j]);
+        a = std::max(phi[i][j - 1], phi[i][j + 1]);
+    }
+
+    // Compute coefficients for the quadratic equation:
+    //   A * new_phi^2 + B * new_phi + C = 0,
+    // where A, B, and C are derived from the finite-difference approximation:
+    //   ( (φ_new - a)^2 / dx^2 ) + ( (φ_new - b)^2 / dy^2 ) = 1.
+    double X = 1.0 / (dx * dx);
+    double Y = 1.0 / (dy * dy);
+    double A = X + Y;
+    double B = -2.0 * (X * a + Y * b);
+    double C = X * a * a + Y * b * b - 1.0;
+    
+    double disc = B * B - 4.0 * A * C;
+    double phi_new;
+
+    // If the discriminant is negative, fallback to a simple update.
+    if (disc < 0) {
+        // Here we simply take the neighbor with smaller absolute value and add a fixed increment.
+        //phi_new = std::min(a, b) + s / sqrt(A);
+        //phi_new = (s > 0) ? std::min(a, b) + 1.0 / sqrt(A) : std::max(a, b) - 1.0 / sqrt(A);
+        if (fabs(a) > fabs(b)){
+            phi_new = (s > 0) ? b+dy : b-dy;
+        } else {
+            phi_new = (s > 0) ? a+dx : a-dx;
+        }
+
+    } else {
+        double sqrt_disc = sqrt(disc);
+        // For φ > 0 choose the positive root; for φ < 0 choose the negative root.
+        if (s > 0){
+            phi_new = (-B + sqrt_disc) / (2.0 * A);
+        } else {
+            phi_new = (-B - sqrt_disc) / (2.0 * A);
+        }
+    }
+
+    // Update only if the new value is closer to zero,
+    // so that the solution converges toward a signed distance function.
+    if (fabs(phi_new) < fabs(phi[i][j])) {
+        phi[i][j] = phi_new;
+    }
+}
+
+// Reinitializes the level set phi using a fast sweeping method.
+// The function performs maxIter sweeps over the interior of the domain.
+// Boundary values are kept fixed.
+void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int maxIter) {
+    int m = phi.size();
+    if (m == 0)
+        return;
+    int n = phi[0].size();
+
+    #pragma omp parallel for collapse(2)
+    for (int i = nG; i < m - nG; i++) {
+        for (int j = nG; j < n - nG; j++) {
+            if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
+    && std::signbit(phi[i][j]) == std::signbit(phi[i+1][j]) && std::signbit(phi[i][j]) == std::signbit(phi[i-1][j])){
+                phi[i][j] = (phi[i][j] <= 0) ? -1e9 : 1e9;
+            }
+        }
+    }
+    phiBC();
+
+
+
+    // Loop over iterations
+    for (int iter = 0; iter < maxIter; iter++) {
+        // Sweep 1: top-left to bottom-right
+        for (int i = nG; i < m - nG; i++) {
+            for (int j = nG; j < n - nG; j++) {
+                if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
+        && std::signbit(phi[i][j]) == std::signbit(phi[i+1][j]) && std::signbit(phi[i][j]) == std::signbit(phi[i-1][j])){
+                    updateLevelSetPoint(phi, i, j);
+                }
+            }
+        }
+        // Sweep 4: bottom-left to top-right
+        for (int i = m - nG - 1; i >= nG; i--) {
+            for (int j = nG; j < n - nG; j++) {
+                if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
+                && std::signbit(phi[i][j]) == std::signbit(phi[i+1][j]) && std::signbit(phi[i][j]) == std::signbit(phi[i-1][j])){
+                    updateLevelSetPoint(phi, i, j);
+                }
+            }
+        }
+        // Sweep 2: bottom-right to top-left
+        for (int i = m - nG - 1; i >= nG; i--) {
+            for (int j = n - nG -1; j >= nG; j--) {
+                if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
+                    && std::signbit(phi[i][j]) == std::signbit(phi[i+1][j]) && std::signbit(phi[i][j]) == std::signbit(phi[i-1][j])){
+                    updateLevelSetPoint(phi, i, j);
+                }
+            }
+        }
+        // Sweep 3: top-right to bottom-left
+        for (int i = nG; i < m - nG; i++) {
+            for (int j = n - nG - 1; j >= nG; j--) {
+                if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
+                && std::signbit(phi[i][j]) == std::signbit(phi[i+1][j]) && std::signbit(phi[i][j]) == std::signbit(phi[i-1][j])){
+                    updateLevelSetPoint(phi, i, j);
+                }
+            }
+        }
+
+    }
+    phiBC();
+}
+
+
 // -------------- Slope limiting ---------------------------- //
 
 void solver::calcHalfSlopes(bool prim, bool direction, fluid& f){
@@ -2216,7 +2342,7 @@ solver::solver(double x_0, double x_1, double y_0, double y_1, double t0, double
         cour(c){
     
     assert(t1>t0);
-    timeMulti = ((endTime-startTime) < 1e-3) ? 1000 : 1; // 1.0/(endTime-startTime);
+    timeMulti = ((endTime-startTime) < 1e-2) ? 1000 : 1; // 1.0/(endTime-startTime);
 
     dx = (x1 - x0)/nCellsX;
     dy = (y1 - y0)/nCellsY;
