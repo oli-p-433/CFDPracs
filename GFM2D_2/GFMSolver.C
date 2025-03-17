@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <omp.h>
 
-void solver::run(){
+void solver::runGFM(){
     alpha = 0;
     std::cout << "pre-bc" << std::endl;
 
@@ -15,6 +15,9 @@ void solver::run(){
     setBCs(fluid2);
     phiBC();
     std::cout << "set BCs" << std::endl;
+    reinitialiseLevelSet(phi,2);
+    writeData();
+
 
     splitFlip = 0;
 
@@ -81,7 +84,7 @@ void solver::run(){
         //time = 4+(splitFlip*7);
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
 
-        fixFreshlyCleared();
+        //fixFreshlyCleared();
         //std::cout << "freshly cleared fixed" << std::endl;
 
         //time = 5+(splitFlip*7);
@@ -102,10 +105,10 @@ void solver::run(){
             //this->fluxMethod(YDIR,fluid1,eos[0]); this->RK2(YDIR,fluid1,eos[0]);
             //this->fluxMethod(YDIR,fluid2,eos[1]); this->RK2(YDIR,fluid2,eos[1]);
 
-            this->fluxMethod(XDIR,fluid1,eos[0]); this->RK2(XDIR,fluid1,eos[0]);
-            this->fluxMethod(XDIR,fluid2,eos[1]); this->RK2(XDIR,fluid2,eos[1]);
-            this->fluxMethod(YDIR,fluid1,eos[0]); this->RK2(YDIR,fluid1,eos[0]);
-            this->fluxMethod(YDIR,fluid2,eos[1]); this->RK2(YDIR,fluid2,eos[1]);
+            this->fluxMethod(XDIR,fluid1,eos[0]); this->pointsUpdate(XDIR,fluid1);
+            this->fluxMethod(XDIR,fluid2,eos[1]); this->pointsUpdate(XDIR,fluid2);
+            this->fluxMethod(YDIR,fluid1,eos[0]); this->pointsUpdate(YDIR,fluid1);
+            this->fluxMethod(YDIR,fluid2,eos[1]); this->pointsUpdate(YDIR,fluid2);
 
         } else {
             //this->fluxMethod(YDIR,fluid1,eos[0]); this->RK2(YDIR,fluid1,eos[0]);
@@ -113,10 +116,10 @@ void solver::run(){
             //this->fluxMethod(XDIR,fluid1,eos[0]); this->RK2(XDIR,fluid1,eos[0]);
             //this->fluxMethod(XDIR,fluid2,eos[1]); this->RK2(XDIR,fluid2,eos[1]);
 
-            this->fluxMethod(YDIR,fluid1,eos[0]); this->RK2(YDIR,fluid1,eos[0]);
-            this->fluxMethod(YDIR,fluid2,eos[1]); this->RK2(YDIR,fluid2,eos[1]);
-            this->fluxMethod(XDIR,fluid1,eos[0]); this->RK2(XDIR,fluid1,eos[0]);
-            this->fluxMethod(XDIR,fluid2,eos[1]); this->RK2(XDIR,fluid2,eos[1]);
+            this->fluxMethod(YDIR,fluid1,eos[0]); this->pointsUpdate(YDIR,fluid1);
+            this->fluxMethod(YDIR,fluid2,eos[1]); this->pointsUpdate(YDIR,fluid2);
+            this->fluxMethod(XDIR,fluid1,eos[0]); this->pointsUpdate(XDIR,fluid1);
+            this->fluxMethod(XDIR,fluid2,eos[1]); this->pointsUpdate(XDIR,fluid2);
 
         }
 
@@ -127,6 +130,70 @@ void solver::run(){
         this->fluid1.interfaceCells={};
         this->fluid2.interfaceCells={};
         this->freshlyCleared={};
+
+        if (checkWrite==1){
+            std::cout << "------------------ writing " << time << " ------------------"<< std::endl;
+            writeData();
+        }
+        
+    } while (time < endTime);
+    std::cout << "simulation finished" << std::endl;
+    writeData();
+};
+
+void solver::run(){
+
+    std::cout << "pre-bc" << std::endl;
+
+    setBCs(fluid1);
+    setBCs(fluid2);
+
+    std::cout << "set BCs" << std::endl;
+
+    splitFlip = 0;
+
+    do{
+        
+        this->setDt();
+        double origDt = dt;
+        
+        //realTime = time;
+
+        std::cout << "time is " << time << std::endl;
+
+        
+        splitFlip++;
+        if (splitFlip%2 == 0){
+            //this->fluxMethod(XDIR,fluid1,eos[0]); this->RK2(XDIR,fluid1,eos[0]);
+            //this->fluxMethod(XDIR,fluid2,eos[1]); this->RK2(XDIR,fluid2,eos[1]);
+            //this->fluxMethod(YDIR,fluid1,eos[0]); this->RK2(YDIR,fluid1,eos[0]);
+            //this->fluxMethod(YDIR,fluid2,eos[1]); this->RK2(YDIR,fluid2,eos[1]);
+
+            this->fluxMethod(XDIR,fluid1,eos[0]); this->pointsUpdate(XDIR,fluid1);
+            this->fluxMethod(XDIR,fluid2,eos[1]); this->pointsUpdate(XDIR,fluid2);
+            this->fluxMethod(YDIR,fluid1,eos[0]); this->pointsUpdate(YDIR,fluid1);
+            this->fluxMethod(YDIR,fluid2,eos[1]); this->pointsUpdate(YDIR,fluid2);
+
+        } else {
+            //this->fluxMethod(YDIR,fluid1,eos[0]); this->RK2(YDIR,fluid1,eos[0]);
+            //this->fluxMethod(YDIR,fluid2,eos[1]); this->RK2(YDIR,fluid2,eos[1]);
+            //this->fluxMethod(XDIR,fluid1,eos[0]); this->RK2(XDIR,fluid1,eos[0]);
+            //this->fluxMethod(XDIR,fluid2,eos[1]); this->RK2(XDIR,fluid2,eos[1]);
+
+            this->fluxMethod(YDIR,fluid1,eos[0]); this->pointsUpdate(YDIR,fluid1);
+            this->fluxMethod(YDIR,fluid2,eos[1]); this->pointsUpdate(YDIR,fluid2);
+            this->fluxMethod(XDIR,fluid1,eos[0]); this->pointsUpdate(XDIR,fluid1);
+            this->fluxMethod(XDIR,fluid2,eos[1]); this->pointsUpdate(XDIR,fluid2);
+
+        }
+
+        setBCs(fluid1);
+        setBCs(fluid2);
+
+        // empty interface cell buffer
+        // this->fluid1.interfaceCells={};
+        // this->fluid2.interfaceCells={};
+        // this->freshlyCleared={};
 
         if (checkWrite==1){
             std::cout << "------------------ writing " << time << " ------------------"<< std::endl;
@@ -413,8 +480,8 @@ void solver::calcInterface(fluid& f){
         //std::cout << "interface position " << x << " " << y << std::endl;
 
         // lPos always in fluid1, rPos always in fluid2
-        std::array<double,2> lPos = {x-1.5*dx*f.interfaceNormals[i][0],y-1.5*dy*f.interfaceNormals[i][1]};
-        std::array<double,2> rPos = {x+1.5*dx*f.interfaceNormals[i][0],y+1.5*dy*f.interfaceNormals[i][1]};
+        std::array<double,2> lPos = {x-1*dx*f.interfaceNormals[i][0],y-1*dy*f.interfaceNormals[i][1]};
+        std::array<double,2> rPos = {x+1*dx*f.interfaceNormals[i][0],y+1*dy*f.interfaceNormals[i][1]};
         //std::cout << "left interface position " << lPos[0] << " " << lPos[1] << std::endl;
         //std::cout << "right interface position " << rPos[0] << " " << rPos[1] << std::endl;
         f.interfacePositions[i] = {lPos,rPos};
@@ -446,10 +513,7 @@ void solver::calcInterface(fluid& f){
 void solver::interpInterfaceStates(fluid& f){ // Calculates interpolated states (primitive) at a set distance normal to the interface
     //int fl1 = (&f == &fluid1) ? -1 : 1;
     for (size_t i = 0; i < f.interfacePositions.size(); ++i){
-        //std::cout << "which fluid: " << fl1 << std::endl;
-        //std::cout << "boundary cell" << f.interfaceCells[i][0] << " " << f.interfaceCells[i][1] << std::endl;
-        //std::cout << "phi value" << phi[f.interfaceCells[i][0]][f.interfaceCells[i][1]] << std::endl;
-        //std::cout << "interface pos"; printState(f.interfacePositions[i][0]); printState(f.interfacePositions[i][1]);
+
         std::array<double,4> lState = bilinear4(f.interfacePositions[i][0][0],f.interfacePositions[i][0][1],fluid1, f.interfaceNormals[i],i);
         std::array<double,4> rState = bilinear4(f.interfacePositions[i][1][0],f.interfacePositions[i][1][1],fluid2, f.interfaceNormals[i],i);
         //print_state(lState); print_state(rState);
@@ -479,143 +543,6 @@ void solver::interpInterfaceStates(fluid& f){ // Calculates interpolated states 
     std::cout << std::endl;
     */
     
-}
-
-std::array<double,4> solver::bilinear(double x, double y, fluid& fluid, std::array<double,2> norm){
-    int rows = nCellsY;
-    int cols = nCellsX;
-
-    // Compute indices of grid cell containing the point
-    int j = ((x - x0) / dx) + nG - 0.5;
-    int i = ((y - y0) / dy) + nG - 0.5;
-
-    //print_state(fluid.u[i][j]);
-
-    /*
-    
-    if (phi[i][j] > 0){
-        if (norm[0] >= 0 && norm[1] >= 0){
-            jR = j+1; iR = i+1;
-        } else if (norm[0] >= 0){
-            jR = j+1; iR = i-1;
-        } else if (norm[0] < 0){
-            jR = j-1; iR = i-1;
-        } else {
-            jR = j-1; iR = i+1;
-        }
-    } else {
-        if (norm[0] >= 0 && norm[1] >= 0){
-            jR = j-1; iR = i-1;
-        } else if (norm[0] >= 0){
-            jR = j-1; iR = i+1;
-        } else if (norm[0] < 0){
-            jR = j+1; iR = i+1;
-        } else {
-            jR = j+1; iR = i-1;
-        }
-    }
-        */
-
-    int jR,iR;
-    if (phi[i][j] > 0) {
-        jR = j + (norm[0] >= 0 ? 1 : -1);
-        iR = i + (norm[1] >= 0 ? 1 : -1);
-    } else {
-        jR = j - (norm[0] >= 0 ? 1 : -1);
-        iR = i - (norm[1] >= 0 ? 1 : -1);
-    }
-
-    if (i == 0 || i == (2*nG+nCellsY) || j==0 || j == (2*nG+nCellsX)){
-        return fluid.u[i][j];
-    }
-
-    /*
-    if (std::signbit(phi[i][j]) != std::signbit(phi[iR][j]) || std::signbit(phi[i][jR]) != std::signbit(phi[i][j])
-        || std::signbit(phi[iR][jR]) != std::signbit(phi[iR][j]) || std::signbit(phi[iR][jR]) != std::signbit(phi[i][jR])){
-        return fluid.u[i][j];
-    } else {
-        return fluid.u[i][j];
-    }
-        */
-
-    if ((iR >= 0 && iR < rows+2*nG) == 0){
-        std::cout << "y x ij = " << y << " " << x << " " << i << " " << j << std::endl;
-        throw std::runtime_error("i interpolation out of bounds");
-    }
-    if ((jR >= 0 && jR < cols+2*nG) == 0){
-        std::cout << "y x ij = " << y << " " << x << " " << i << " " << j << std::endl;
-        throw std::runtime_error("j interpolation out of bounds");
-    }
-
-
-    //std::cout << "i = " << i << " j = " << j << "iR = " << iR << "jR = " << jR << std::endl;
-
-    //if (i < 0 || i > rows - 1 || j < 0 || j > cols - 1) {
-        //std::cout << i << " " << j << std::endl;
-        //return {NAN,NAN,NAN,NAN};
-        //throw std::runtime_error("interpolation out of bounds");
-    //};
-
-    // Physical coordinates of the four surrounding points
-    /*
-    double xL = x0 + (j - nG + 0.5) * dx;
-    double xR = x0 + (j + 1 - nG + 0.5) * dx;
-    double yL = y0 + (i - nG + 0.5) * dy;
-    double yR = y0 + (i + 1 - nG + 0.5) * dy;
-    */
-    double xL = x0 + (j - nG + 0.5) * dx;
-    double xR = x0 + (jR - nG + 0.5) * dx;
-    double yL = y0 + (i - nG + 0.5) * dy;
-    double yR = y0 + (iR - nG + 0.5) * dy;
-    
-    std::array<double,4> f00 = fluid.u[i][j];
-    std::array<double,4> f10 = fluid.u[iR][j];
-    std::array<double,4> f01 = fluid.u[i][jR];
-    std::array<double,4> f11 = fluid.u[iR][jR];
-
-    assert(f00[RHO] > 0 && f01[RHO] > 0 && f10[RHO] > 0 && f11[RHO] > 0);
-    assert(f00[PRES] > 0 && f01[PRES] > 0 && f10[PRES] > 0 && f11[PRES] > 0);
-
-    
-    //std::cout << "interpolation points" << std::endl;
-    //std::cout << i << " " << j << " " << f00[RHO] << " " << f00[UX]<< " "  << f00[UY]<< " "  << f00[PRES]<< " "  << std::endl;
-    //std::cout << i << " " << jR << " " << f01[RHO] << " " << f01[UX]<< " "  << f01[UY]<< " "  << f01[PRES]<< " "  << std::endl;
-    //std::cout << iR << " " << j << " " << f10[RHO] << " " << f10[UX]<< " "  << f10[UY]<< " "  << f10[PRES]<< " "  << std::endl;
-    //std::cout << iR << " " << jR << " " << f11[RHO] << " " << f11[UX]<< " "  << f11[UY]<< " "  << f11[PRES]<< " "  << std::endl;
-    
-    
-    
-
-    //std::cout << "neighbour values" << f00[0] << " " << f10[0] << " " << f01[0] << " " << f11[0] << std::endl;
-
-    // Interpolation along x at y0 and y1
-    std::array<double,4> f_x_y0 = (xR - x) / (xR - xL) * f00 + (x - xL) / (xR - xL) * f01;
-    std::array<double,4> f_x_y1 = (xR - x) / (xR - xL) * f10 + (x - xL) / (xR - xL) * f11;
-    
-    // Interp along y
-    std::array<double,4> res = (yR - y) / (yR - yL) * f_x_y0 + (y - yL) / (yR - yL) * f_x_y1;
-    //std::cout << "result:" << res[0] << " " << res[1] << " " << res[2] << " " << res[3] << " " << std::endl;
-    if (res[RHO] <= 0){
-        //std::cout << i << " " << iR << " " << j << " " << jR << std::endl;
-        //throw std::runtime_error("Negative density extrapolated");
-        double minRho = 1e10;
-        for (double i : {f00[RHO],f01[RHO],f10[RHO],f11[RHO]}){
-            minRho = std::min(minRho,i);
-        }
-        res[RHO] = minRho;
-    }
-    
-    if (res[PRES] <= 0){
-        //std::cout << i << " " << iR << " " << j << " " << jR << std::endl;
-        //throw std::runtime_error("Negative density extrapolated");
-        double minPres = 1e10;
-        for (double i : {f00[PRES],f01[PRES],f10[PRES],f11[PRES]}){
-            minPres = std::min(minPres,i);
-        }
-        res[PRES] = minPres;
-    }
-    
-    return res;
 }
 
 std::array<double,4> solver::bilinear4(double x, double y, fluid& fluid, std::array<double,2> norm, int index) {
@@ -649,14 +576,14 @@ std::array<double,4> solver::bilinear4(double x, double y, fluid& fluid, std::ar
         j <= 0 || j >= (2*nG + nCellsX - 1)) {
         // Treat the base cell as any other cell.
         if (std::signbit(phi[i][j]) != std::signbit(fl1))
-            throw std::runtime_error("Base cell outside real fluid (boundary case)");
-        return fluid.u[i][j];
+            //throw std::runtime_error("Base cell outside real fluid (boundary case)");
+            return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
     }
     // Check boundaries for the neighbor cell.
     if (iR < 0 || iR >= (2*nG + nCellsY) ||
         jR < 0 || jR >= (2*nG + nCellsX)) {
-        std::cout << "y x ij = " << y << " " << x << " " << i << " " << j << std::endl;
-        throw std::runtime_error("Interpolation neighbor out of bounds");
+        //throw std::runtime_error("Interpolation neighbor out of bounds");
+        return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
     }
 
     // Physical coordinates of cell centers.
@@ -686,8 +613,7 @@ std::array<double,4> solver::bilinear4(double x, double y, fluid& fluid, std::ar
     double denom_y = (yR_coord - yL);
     if (denom_x == 0 || denom_y == 0) {
         if (!valid00)
-            throw std::runtime_error("Degenerate cell spacing and invalid base cell");
-        return fluid.u[i][j];
+            return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
     }
     double w00 = ((xR_coord - x) / denom_x) * ((yR_coord - y) / denom_y);
     double w01 = ((x - xL) / denom_x) * ((yR_coord - y) / denom_y);
@@ -724,126 +650,6 @@ std::array<double,4> solver::bilinear4(double x, double y, fluid& fluid, std::ar
     }
     
     return res;
-}
-
-std::array<double,4> solver::bilinear2(double x, double y, fluid& fluid, std::array<double,2> norm) {
-    int rows = nCellsY;
-    int cols = nCellsX;
-
-    int fl1 = (&fluid == &fluid1) ? -1 : 1;
-
-    // Compute indices of grid cell containing the point (centered by subtracting 0.5)
-    int j = ((x - x0) / dx) + nG - 0.5;
-    int i = ((y - y0) / dy) + nG - 0.5;
-
-    if (std::signbit(phi[i][j]) != std::signbit(fl1)){
-        throw std::runtime_error("point outside real fluid");
-    }
-
-
-    // --- (a) Symmetric neighbor selection ---
-    int jR, iR;
-    if (phi[i][j] > 0) {
-        // For fluid2 (real when phi > 0): use positive offset if normal component is >= 0
-        jR = j + (norm[0] >= 0 ? 1 : -1);
-        iR = i + (norm[1] >= 0 ? 1 : -1);
-    } else {
-        // For fluid1 (real when phi <= 0): reverse the offset compared to fluid2
-        jR = j - (norm[0] >= 0 ? 1 : -1);
-        iR = i - (norm[1] >= 0 ? 1 : -1);
-    }
-
-    // Check boundaries for the base cell; if near boundaries, simply return its value.
-    if (i <= 0 || i >= (2*nG + nCellsY - 1) ||
-        j <= 0 || j >= (2*nG + nCellsX - 1)) {
-        return fluid.u[i][j];
-    }
-    // Check boundaries for the neighbor cell.
-    if (iR < 0 || iR >= (2*nG + nCellsY) ||
-        jR < 0 || jR >= (2*nG + nCellsX)) {
-        std::cout << "y x ij = " << y << " " << x << " " << i << " " << j << std::endl;
-        throw std::runtime_error("Interpolation neighbor out of bounds");
-    }
-
-    // Physical coordinates of cell centers.
-    double xL = x0 + (j - nG + 0.5) * dx;
-    double xR_coord = x0 + (jR - nG + 0.5) * dx;
-    double yL = y0 + (i - nG + 0.5) * dy;
-    double yR_coord = y0 + (iR - nG + 0.5) * dy;
-
-    // Retrieve the fluid state at the four grid points.
-    std::array<double,4> f00 = fluid.u[i][j];   // Base cell.
-    std::array<double,4> f10 = fluid.u[iR][j];    // Cell vertically (or diagonally) offset.
-    std::array<double,4> f01 = fluid.u[i][jR];    // Cell horizontally offset.
-    std::array<double,4> f11 = fluid.u[iR][jR];     // Diagonal neighbor.
-
-    // Sanity-check: density and pressure must be positive in all cells.
-    assert(f00[RHO] > 0 && f01[RHO] > 0 && f10[RHO] > 0 && f11[RHO] > 0);
-    assert(f00[PRES] > 0 && f01[PRES] > 0 && f10[PRES] > 0 && f11[PRES] > 0);
-
-    // --- (b) Check that all cells are in the real fluid ---
-    // Determine the "real" fluid based on the base cell.
-    bool baseIsFluid2 = (phi[i][j] > 0);  // true means fluid2 is real; false means fluid1 is real.
-    // For each cell, check that its phi agrees with the base cell.
-    bool valid00 = true;  // Base cell is assumed valid.
-    bool valid10 = ((phi[iR][j] > 0) == baseIsFluid2);
-    bool valid01 = ((phi[i][jR] > 0) == baseIsFluid2);
-    bool valid11 = ((phi[iR][jR] > 0) == baseIsFluid2);
-
-    // Compute standard bilinear interpolation weights.
-    double denom_x = (xR_coord - xL);
-    double denom_y = (yR_coord - yL);
-    if (denom_x == 0 || denom_y == 0) {
-        // Degenerate cell spacing; return the base cell's value.
-        return fluid.u[i][j];
-    }
-    double w00 = ((xR_coord - x) / denom_x) * ((yR_coord - y) / denom_y);
-    double w01 = ((x - xL) / denom_x) * ((yR_coord - y) / denom_y);
-    double w10 = ((xR_coord - x) / denom_x) * ((y - yL) / denom_y);
-    double w11 = ((x - xL) / denom_x) * ((y - yL) / denom_y);
-
-    // Set weights to zero for cells not in the real fluid.
-    if (!valid00) w00 = 0;
-    if (!valid01) w01 = 0;
-    if (!valid10) w10 = 0;
-    if (!valid11) w11 = 0;
-
-    double wsum = w00 + w01 + w10 + w11;
-    std::array<double,4> res;
-    if (wsum > 0) {
-        // Normalize the weights and compute the weighted sum.
-        w00 /= wsum;
-        w01 /= wsum;
-        w10 /= wsum;
-        w11 /= wsum;
-        res = w00 * f00 + w01 * f01 + w10 * f10 + w11 * f11;
-    } else {
-        // If no valid neighbors remain, fall back to the base cell.
-        res = fluid.u[i][j];
-    }
-
-    // Safeguards: ensure density and pressure remain positive.
-    if (res[RHO] <= 0) {
-        double minRho = std::min({f00[RHO], f01[RHO], f10[RHO], f11[RHO]});
-        res[RHO] = minRho;
-    }
-    if (res[PRES] <= 0) {
-        double minPres = std::min({f00[PRES], f01[PRES], f10[PRES], f11[PRES]});
-        res[PRES] = minPres;
-    }
-    
-    return res;
-}
-
-std::array<double,4> solver::bilinear3(double x, double y, fluid& fluid, std::array<double,2> norm) {
-    int rows = nCellsY;
-    int cols = nCellsX;
-
-    // Compute indices of grid cell containing the point (centered by subtracting 0.5)
-    int j = ((x - x0) / dx) + nG - 0.5;
-    int i = ((y - y0) / dy) + nG - 0.5;
-    
-    return neighbourAvgInterp(fluid,i,j);
 }
 
 void solver::resolveVelocities(fluid& f){
@@ -1134,7 +940,7 @@ void solver::GFFastSweeping2(){
 }
 
 void solver::GFFastSweeping(){
-    double maxIter = (splitFlip == 0) ? 20 : 1;
+    double maxIter = (splitFlip == 0) ? 20 : 2;
     calcPhiGrad();
     //std::cout << "calced phi grad" << std::endl;
     setInterface();
@@ -1391,6 +1197,7 @@ std::array<double,4> solver::HLLC(std::array<double,4> left,std::array<double,4>
     //std::cout << SL << " " << SR << std::endl;
     if ((std::isnan(SL) == 1) || (std::isnan(SR) == 1)){
         std::cout << "SL SR " << SL << " " << SR << std::endl;
+        throw std::runtime_error("SL or SR is nan");
     }
 
     double rhoL = left[RHO];
@@ -1764,41 +1571,8 @@ void solver::neighbourAvg(fluid& f, int i, int j){
     if (count > 0) {
         f.u[i][j] = sum / count;  // Average the four-vectors
     } else {
-        throw std::runtime_error("freshly cleared cell has no valid neighbours");
-    }
-}
-
-std::array<double,4> solver::neighbourAvgInterp(fluid& f, int i, int j){
-
-    std::array<double, 4> sum = {0.0, 0.0, 0.0, 0.0};
-    int count = 0;
-
-    // Get the sign of phi at (i, j)
-    bool sign = phi[i][j] >= 0.0;
-
-    // Offsets for the four neighbors
-    int offsets[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-
-    // Check each neighbor
-    for (int k = 0; k < 4; ++k) {
-        int ni = i + offsets[k][0];
-        int nj = j + offsets[k][1];
-
-        // Boundary check
-        if (ni >= 0 && ni < static_cast<int>(phi.size()) && nj >= 0 && nj < static_cast<int>(phi[0].size())) {
-            // Check if the sign of phi is the same
-            if ((phi[ni][nj] >= 0.0) == sign) {
-                sum = sum + f.u[ni][nj];  // Sum the four-vectors
-                ++count;
-            }
-        }
-    }
-
-    // Average and assign if there are valid neighbors
-    if (count > 0) {
-        return sum / count;  // Average the four-vectors
-    } else {
-        throw std::runtime_error("freshly cleared cell has no valid neighbours");
+        f.u[i][j] = f.u[i][j]; // ie do nothing - allow the cell to keep the ghost value until the boundary is updated next.
+        //throw std::runtime_error("freshly cleared cell has no valid neighbours");
     }
 }
 
@@ -2237,6 +2011,7 @@ std::array<double,4> solver::superbee(std::array<double,4> slp){
     //return {minBval,minBval,minBval};
     return minbArr;
 };
+
 
 std::array<double,4> solver::vanLeer(std::array<double,4> slp){
     std::array<double,4> minbArr{0,0,0,0};

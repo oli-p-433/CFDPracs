@@ -15,12 +15,12 @@ int main(){
     double gamma1 = 1.4;
 
     std::array<double,3> sR = {1.0, 0.0, 0.01}; // {50,0,1e5};
-    double gamma2 = 1.4;
+    double gamma2 = 1.67;
 
-    double time = 0.012;
+    double time = 0.0002;
     double discPosition = 0.5;
 
-    riemann solution(gamma1,gamma2,sL,sR,0,1,discPosition,time,100,0,0);
+    riemann solution(gamma1,gamma2,sL,sR,0,1,discPosition,time,500,0,0);
 
     std::string dirname;
     std::cout << std::endl << "Enter data output folder name:"; std::cin >> dirname;  

@@ -78,6 +78,7 @@ class solver{
 
         void pointsUpdate(bool,fluid&);
         void RK2(bool, fluid&,EOS*);
+        void runGFM();
         void run();
 
         // Level set
