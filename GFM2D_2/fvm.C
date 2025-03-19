@@ -18,27 +18,27 @@ int main(){
     // double x0{-0.6}, x1{1.4}, y0{-0.4}, y1{1.6};
     // double startTime = 0.0, endTime = 0.0014;
     
-    // int nCellsX = 650;
-    // int nCellsY = 180;
-    // double x0{0}, x1{0.325}, y0{-0.0445}, y1{0.0445};
-    // double startTime = 0.0, endTime = 0.35;
+    int nCellsX = 325;
+    int nCellsY = 89;
+    double x0{0.0}, x1{0.325}, y0{-0.0445}, y1{0.0445};
+    double startTime = 0.0, endTime = 500e-6;
 
     // int nCellsX = 100;
     // int nCellsY = 1;
     // double x0{0}, x1{1}, y0{-0.5/nCellsX}, y1{0.5/nCellsX};
-    // double startTime = 0.0, endTime = 0.0014;
+    // double startTime = 0.0, endTime = 500e-6;
 
-    int nCellsX = 600;
-    int nCellsY = 60;
-    double x0{0}, x1{10}, y0{-0.5}, y1{0.5};
-    double startTime = 0.0, endTime = 0.078;
+    // int nCellsX = 1000;
+    // int nCellsY = 100;
+    // double x0{0}, x1{10}, y0{-0.5}, y1{0.5};
+    // double startTime = 0.0, endTime = 0.078;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
 
     // construct EOS object and give to sovler
     //stiffenedGas stiffgas(7.15,3e8,0);
-    idealGas idgas1(1.4); idealGas idgas2(1.093);
+    idealGas idgas1(1.4); idealGas idgas2(1.648);
 
     std::array<EOS*,2> materials = {&idgas1,&idgas2};
     solver sim(x0,x1,y0,y1,startTime,endTime,nCellsX,nCellsY,2,cour);
@@ -54,7 +54,8 @@ int main(){
     sim.dirName = dirname;
 
 
-    sim.setWriteInterval(0.001);
+    sim.setWriteInterval(5e-6);
+    //sim.timeMulti = 100;
 
     sim.setBCs = [&sim](fluid& f) {
         sim.get_boundary().reflectiveTopBC(f);
@@ -176,6 +177,8 @@ int main(){
             //     phiInit[i][j] = -(p - (0.5 + 0.1));
             // }
 
+            // Physically realistic variables:
+
             // // Set the initial velocity fields based on the location relative to the interface
             // if (p <= (0.5 - 0.45)) {
             //     uInit1[i][j] = sim.set_vals(FLUID1, 1.3333, 0.3535*sqrt(1e5) * cos(theta), 0.3535*sqrt(1e5) * sin(theta), 1.5e5);
@@ -280,20 +283,35 @@ int main(){
             
             //std::cout << phiInit[i][j] << " ";
             
-            //  SHOCK-BUBBLE TEST //
+            //  SHOCK-BUBBLE TEST (fedkiw) //
             
-            // phiInit[i][j] = -(sqrt((x-0.175)*(x-0.175)+(y)*(y))-0.025);
+            phiInit[i][j] = -(sqrt((x-0.175)*(x-0.175)+(y)*(y))-0.025);
             
-            // if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
-            //     uInit1[i][j] = sim.set_vals(FLUID1,0.1380,0,0,1);
-            //     uInit2[i][j] = sim.set_vals(FLUID2,0.1380,0,0,1);
-            // } else if (x>=0.225){
-            //     uInit1[i][j] = sim.set_vals(FLUID1,1.3764,-0.394,0,1.5698);
-            //     uInit2[i][j] = sim.set_vals(FLUID2,1.3764,-0.394,0,1.5698);
-            // } else {
-            //     uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1);
-            //     uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1);
-            // }
+            if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
+                uInit1[i][j] = sim.set_vals(FLUID1,0.1380,0,0,1);
+                uInit2[i][j] = sim.set_vals(FLUID2,0.1380,0,0,1);
+            } else if (x>=0.225){
+                uInit1[i][j] = sim.set_vals(FLUID1,1.3764,-0.394,0,1.5698);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.3764,-0.394,0,1.5698);
+            } else {
+                uInit1[i][j] = sim.set_vals(FLUID1,1,0,0,1);
+                uInit2[i][j] = sim.set_vals(FLUID2,1,0,0,1);
+            }
+
+            // Marquina shock bubble
+
+            phiInit[i][j] = -(sqrt((x-0.175)*(x-0.175)+(y)*(y))-0.025);
+            
+            if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
+                uInit1[i][j] = sim.set_vals(FLUID1,0.2228,0,0,101325);
+                uInit2[i][j] = sim.set_vals(FLUID2,0.2228,0,0,101325);
+            } else if (x>=0.225){
+                uInit1[i][j] = sim.set_vals(FLUID1,1.6861,-156.26,0,250638);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.6861,-156.26,0,250638);
+            } else {
+                uInit1[i][j] = sim.set_vals(FLUID1,1.225,0,0,101325);
+                uInit2[i][j] = sim.set_vals(FLUID2,1.225,0,0,101325);
+            }
 
             // Haas-Sturtevant Shock Bubble
             
@@ -312,18 +330,42 @@ int main(){
 
             // ------------- Richtmeyer - Meshkov instability -------------- //
 
-            phiInit[i][j] = x - 0.5 + 0.056*cos(2*M_PI*y);
+            // phiInit[i][j] = x - 0.5 + 0.056*cos(2*M_PI*y);
 
-            if (x < 0.4){
-                uInit1[i][j] = sim.set_vals(FLUID1,0.67,161.68,0,1.5e5);
-                uInit2[i][j] = sim.set_vals(FLUID2,0.67,161.68,0,1.5e5);
-            } else if (x < 0.5 - 0.056*cos(2*M_PI*y)){
-                uInit1[i][j] = sim.set_vals(FLUID1,0.5,0,0,1e5);
-                uInit2[i][j] = sim.set_vals(FLUID2,0.5,0,0,1e5);
-            } else {
-                uInit1[i][j] = sim.set_vals(FLUID1,2.5,0,0,1e5);
-                uInit2[i][j] = sim.set_vals(FLUID2,2.5,0,0,1e5);
-            }
+            // if (x < 0.4){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,0.67,161.68,0,1.5e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,0.67,161.68,0,1.5e5);
+            // } else if (x < 0.5 - 0.056*cos(2*M_PI*y)){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,0.5,0,0,1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,0.5,0,0,1e5);
+            // } else {
+            //     uInit1[i][j] = sim.set_vals(FLUID1,2.5,0,0,1e5);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,2.5,0,0,1e5);
+            // }
+
+
+            // ------------- Water collision ------------------- // 
+
+            // if (x>0.145){
+            //     phiInit[i][j] = -(sqrt((x-0.175)*(x-0.175)+(y)*(y))-0.025);
+            // } else {
+            //     phiInit[i][j] = -(sqrt((x-0.115)*(x-0.115)+(y)*(y))-0.007);
+            // }
+            
+            
+            // if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1000,0,0,101325);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1000,0,0,101325);
+            // } else if ((x-0.115)*(x-0.115)+(y*y) < 0.007*0.007){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1000,3000,0,101325);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1000,3000,0,101325);
+            // } else if ((x-0.115)*(x-0.115)+(y*y) < 0.008*0.008){
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1.225,3000,0,101325);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1.225,3000,0,101325);
+            // } else {
+            //     uInit1[i][j] = sim.set_vals(FLUID1,1.225,0,0,101325);
+            //     uInit2[i][j] = sim.set_vals(FLUID2,1.225,0,0,101325);
+            // }
                 
 
                 
@@ -335,24 +377,6 @@ int main(){
         }
 
     }
-
-    std::ofstream initFile(dirname + "/0");
-    initFile << "x y phi rho1 rho2 vx1 vx2 vy1 vy2 p1 p2" << std::endl;
-    for (size_t i = 0; i < uInit1.size(); ++i){
-        double y = y0 + (i - static_cast<double>(sim.ghosts()) + 0.5) * sim.get_dxdy()[1];
-        for (size_t j = 0; j < uInit1[0].size(); ++j) {
-            double x = x0 + (j - static_cast<double>(sim.ghosts()) + 0.5) * sim.get_dxdy()[0];
-            std::array<double,4> prim1 = sim.eos[0]->consvToPrim(uInit1[i][j]);
-            std::array<double,4> prim2 = sim.eos[1]->consvToPrim(uInit2[i][j]);
-            initFile << x << " " << y << " " << phiInit[i][j] << " "
-            << prim1[0] << " " << prim2[0] 
-            << " " << prim1[1] << " " << prim2[1]
-             << " " << prim1[2] << " " << prim2[2]
-              << " " << prim1[3] << " " << prim2[3]
-               << std::endl;
-        }
-    }
-    initFile.close();
     
 
     // Initialising u field: //

@@ -221,7 +221,7 @@ std::array<double,4> riemann::interfaceRiemann(bool left){ // states will be in 
 
     //std::cout << leftStar[0] << " " << leftStar[1] << " " << leftStar[2] << " " << leftStar[3] << std::endl;
     //std::cout << rightStar[0] << " " << rightStar[1] << " " << rightStar[2] << " " << rightStar[3] << std::endl;
-    std::array<double,4> result = left ? std::array<double,4>{leftStar[0],leftStar[1],state1orig[2],leftStar[2]} : std::array<double,4>{rightStar[0],rightStar[1],state2orig[2],rightStar[2]};
+    std::array<double,4> result = left ? std::array<double,4>{rightStar[0],rightStar[1],state2orig[2],rightStar[2]} : std::array<double,4>{leftStar[0],leftStar[1],state1orig[2],leftStar[2]};
     return result;
 }
 
@@ -378,7 +378,7 @@ riemann::riemann(double gL, double gR, std::array<double,4> stateL, std::array<d
 
     dx = (x1-x0)/nCells;
 
-    std::vector<std::string> variables = {"rho","v","p","rhoExact","vExact","pExact"};
+    std::array<std::string,6> variables = {"rho","v","p","rhoExact","vExact","pExact"};
 
     //varMap["rho"] = 0; varMap["v"] = 1; varMap["p"] = 2;
     for (size_t i = 0; i<variables.size(); ++i){

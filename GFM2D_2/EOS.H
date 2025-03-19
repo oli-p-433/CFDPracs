@@ -18,6 +18,10 @@ class EOS {
         virtual std::array<double,4> consvToPrim(const std::array<double,4>&)const = 0;
         double get_gamma();
 
+        virtual double get_pInf() const {
+            return 0.0; // or throw std::runtime_error("pInf not available for this EOS type");
+        }
+
         EOS(double);
 
         virtual ~EOS() = default;
@@ -44,5 +48,12 @@ class stiffenedGas : public EOS {
         std::array<double,4> primToConsv(const std::array<double,4>&)const override;
         std::array<double,4> consvToPrim(const std::array<double,4>&)const override;
 
+        double get_pInf() const override {
+            return p_inf;
+        }
+
+        
         stiffenedGas(double, double, double e_inf = 0);
+
+        
 };

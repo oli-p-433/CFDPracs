@@ -28,7 +28,7 @@ int main(){
     solution.dirName = dirname;
 
     // initialise data locations
-    std::vector<std::string> variables = {"rho","v","p","rhoExact","vExact","pExact"};
+    std::array<std::string,6> variables = {"rho","v","p","rhoExact","vExact","pExact"};
     for (size_t i = 0; i<variables.size(); ++i){
         std::string name = dirname + "/" + variables[i];
         std::filesystem::create_directory(name);

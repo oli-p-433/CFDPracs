@@ -27,6 +27,25 @@ void solver::runGFM(){
         //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
         
         phiBC();
+
+        this->setDt();
+        double origDt = dt;
+        
+        //realTime = time;
+
+        std::cout << "time is " << time << std::endl;
+
+        //std::cout << "setting phiBC" << std::endl;
+        phiBC();
+        
+        phiUpdate(splitFlip);
+
+        
+        if (splitFlip % 1 == 0){
+           phiBC();
+           reinitialiseLevelSet(phi,2);
+           //std::cout << "phi reinitialised" << std::endl;
+        }
         //std::cout << "finding boundary" << std::endl;
         this->findBoundary();
         //std::cout << "number of interface cells = " << interfaceCells.size() << std::endl;
@@ -64,39 +83,7 @@ void solver::runGFM(){
         //this->setGhostFluids();
         //std::cout << "set ghost fluids" << std::endl; 
         
-        this->setDt();
-        double origDt = dt;
-        
-        //realTime = time;
 
-        std::cout << "time is " << time << std::endl;
-
-        //std::cout << "setting phiBC" << std::endl;
-        phiBC();
-        //std::cout << "updating phi" << std::endl;
-
-        //time = 3+(splitFlip*7);
-        //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
-        
-        phiUpdate(splitFlip);
-        //std::cout << "phi updated" << std::endl;
-
-        //time = 4+(splitFlip*7);
-        //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
-
-        //fixFreshlyCleared();
-        //std::cout << "freshly cleared fixed" << std::endl;
-
-        //time = 5+(splitFlip*7);
-        //writeData("rho"); writeData("vx"); writeData("vy"); writeData("p");
-
-        //time = 0.0;
-        
-        if (splitFlip % 1 == 0){
-           phiBC();
-           reinitialiseLevelSet(phi,2);
-           //std::cout << "phi reinitialised" << std::endl;
-        }
         
         splitFlip++;
         if (splitFlip%2 == 0){
@@ -480,8 +467,8 @@ void solver::calcInterface(fluid& f){
         //std::cout << "interface position " << x << " " << y << std::endl;
 
         // lPos always in fluid1, rPos always in fluid2
-        std::array<double,2> lPos = {x-1*dx*f.interfaceNormals[i][0],y-1*dy*f.interfaceNormals[i][1]};
-        std::array<double,2> rPos = {x+1*dx*f.interfaceNormals[i][0],y+1*dy*f.interfaceNormals[i][1]};
+        std::array<double,2> lPos = {x-1.5*dx*f.interfaceNormals[i][0],y-1.5*dy*f.interfaceNormals[i][1]};
+        std::array<double,2> rPos = {x+1.5*dx*f.interfaceNormals[i][0],y+1.5*dy*f.interfaceNormals[i][1]};
         //std::cout << "left interface position " << lPos[0] << " " << lPos[1] << std::endl;
         //std::cout << "right interface position " << rPos[0] << " " << rPos[1] << std::endl;
         f.interfacePositions[i] = {lPos,rPos};
@@ -514,8 +501,8 @@ void solver::interpInterfaceStates(fluid& f){ // Calculates interpolated states 
     //int fl1 = (&f == &fluid1) ? -1 : 1;
     for (size_t i = 0; i < f.interfacePositions.size(); ++i){
 
-        std::array<double,4> lState = bilinear4(f.interfacePositions[i][0][0],f.interfacePositions[i][0][1],fluid1, f.interfaceNormals[i],i);
-        std::array<double,4> rState = bilinear4(f.interfacePositions[i][1][0],f.interfacePositions[i][1][1],fluid2, f.interfaceNormals[i],i);
+        std::array<double,4> lState = bilinear5(f.interfacePositions[i][0][0],f.interfacePositions[i][0][1],fluid1, f.interfaceNormals[i],i);
+        std::array<double,4> rState = bilinear5(f.interfacePositions[i][1][0],f.interfacePositions[i][1][1],fluid2, f.interfaceNormals[i],i);
         //print_state(lState); print_state(rState);
         
         f.interfaceStates[i] = {eos[0]->consvToPrim(lState),eos[1]->consvToPrim(rState)};
@@ -544,6 +531,101 @@ void solver::interpInterfaceStates(fluid& f){ // Calculates interpolated states 
     */
     
 }
+
+std::array<double,4> solver::bilinear5(double x, double y, fluid& fluid, std::array<double,2> norm, int index) {
+    int rows = nCellsY;
+    int cols = nCellsX;
+
+    // Expected sign for the fluid: -1 for fluid1 and 1 for fluid2.
+    int fl1 = (&fluid == &fluid1) ? -1 : 1;
+
+    // Compute the cell coordinate in "doubled" index space.
+    double jdub = ((x - x0) / dx) + nG - 0.5;
+    double idub = ((y - y0) / dy) + nG - 0.5;
+
+    // Instead of choosing the neighbor in the normal direction, we take the floor
+    // to get the lower indices and then the immediate neighbor in each direction.
+    int j0 = static_cast<int>(std::floor(jdub));
+    int i0 = static_cast<int>(std::floor(idub));
+    int j1 = j0 + 1;
+    int i1 = i0 + 1;
+
+    // Check boundaries for the base cell; if near boundaries, simply return its value if valid.
+    if (i0 <= 0 || i0 >= (2*nG + nCellsY - 1) ||
+        j0 <= 0 || j0 >= (2*nG + nCellsX - 1)) {
+        if (std::signbit(phi[i0][j0]) != std::signbit(fl1))
+            return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
+    }
+    // Check boundaries for the neighbor cell.
+    if (i1 < 0 || i1 >= (2*nG + nCellsY) ||
+        j1 < 0 || j1 >= (2*nG + nCellsX)) {
+        return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
+    }
+
+    // Physical coordinates of the centers of the lower-left and upper-right cells.
+    double xL      = x0 + (j0 - nG + 0.5) * dx;
+    double xR_coord = x0 + (j1 - nG + 0.5) * dx;
+    double yL      = y0 + (i0 - nG + 0.5) * dy;
+    double yR_coord = y0 + (i1 - nG + 0.5) * dy;
+
+    // Retrieve the fluid state at the four grid points.
+    std::array<double,4> f00 = fluid.u[i0][j0];  // Lower-left cell.
+    std::array<double,4> f01 = fluid.u[i0][j1];  // Lower-right cell.
+    std::array<double,4> f10 = fluid.u[i1][j0];  // Upper-left cell.
+    std::array<double,4> f11 = fluid.u[i1][j1];  // Upper-right cell.
+
+    // Sanity-check: density and pressure must be positive in all cells.
+    assert(f00[RHO] > 0 && f01[RHO] > 0 && f10[RHO] > 0 && f11[RHO] > 0);
+    assert(f00[PRES] > 0 && f01[PRES] > 0 && f10[PRES] > 0 && f11[PRES] > 0);
+
+    // Mark valid cells: each cell is valid only if its sign matches fl1.
+    bool valid00 = (std::signbit(phi[i0][j0])  == std::signbit(fl1));
+    bool valid01 = (std::signbit(phi[i0][j1])  == std::signbit(fl1));
+    bool valid10 = (std::signbit(phi[i1][j0])  == std::signbit(fl1));
+    bool valid11 = (std::signbit(phi[i1][j1])  == std::signbit(fl1));
+
+    // Compute standard bilinear interpolation weights.
+    double denom_x = (xR_coord - xL);
+    double denom_y = (yR_coord - yL);
+    if (denom_x == 0 || denom_y == 0) {
+        if (!valid00)
+            return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
+    }
+    double w00 = ((xR_coord - x) / denom_x) * ((yR_coord - y) / denom_y);
+    double w01 = ((x - xL) / denom_x) * ((yR_coord - y) / denom_y);
+    double w10 = ((xR_coord - x) / denom_x) * ((y - yL) / denom_y);
+    double w11 = ((x - xL) / denom_x) * ((y - yL) / denom_y);
+
+    // Zero out the weights of cells that are not in the correct fluid.
+    if (!valid00) w00 = 0;
+    if (!valid01) w01 = 0;
+    if (!valid10) w10 = 0;
+    if (!valid11) w11 = 0;
+
+    double wsum = w00 + w01 + w10 + w11;
+    if (wsum <= 0) {
+        return fluid.u[fluid.interfaceCells[index][0]][fluid.interfaceCells[index][1]];
+    }
+    // Normalize the weights and compute the weighted sum.
+    w00 /= wsum;
+    w01 /= wsum;
+    w10 /= wsum;
+    w11 /= wsum;
+    std::array<double,4> res = w00 * f00 + w01 * f01 + w10 * f10 + w11 * f11;
+
+    // Safeguards: ensure density and pressure remain positive.
+    if (res[RHO] <= 0) {
+        double minRho = std::min({f00[RHO], f01[RHO], f10[RHO], f11[RHO]});
+        res[RHO] = minRho;
+    }
+    if (res[PRES] <= 0) {
+        double minPres = std::min({f00[PRES], f01[PRES], f10[PRES], f11[PRES]});
+        res[PRES] = minPres;
+    }
+    
+    return res;
+}
+
 
 std::array<double,4> solver::bilinear4(double x, double y, fluid& fluid, std::array<double,2> norm, int index) {
     int rows = nCellsY;
@@ -693,7 +775,7 @@ void solver::resolveVelocities(fluid& f){
 
 std::array<double,4> solver::exactRiemann(std::array<double,4> left,std::array<double,4> right, EOS* eos, bool direction){
     double d = (direction == XDIR) ? dx : dy;
-    riemann solution(eos->get_gamma(),eos->get_gamma(),eos->consvToPrim(left),eos->consvToPrim(right),direction,-0.5*d,0.5*d,0,dt,2,0,0);
+    riemann solution(eos->get_gamma(),eos->get_gamma(),eos->consvToPrim(left),eos->consvToPrim(right),direction,-0.5*d,0.5*d,0,dt,2,eos->get_pInf(),eos->get_pInf());
     std::array<double,4> result = solution.exctRiemann();
     if (result[RHO] <= 0){
         std::array<double,4> l1 = eos->consvToPrim(left);
@@ -718,7 +800,7 @@ void solver::interfaceRiem(fluid& f){
         //print_state(f.interfaceStates[i][0]); print_state(f.interfaceStates[i][1]);
         //print_state(lState); print_state(rState);
 
-        riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),lState,rState,1,-1.5*(dx+dy)/2.0,1.5*(dx+dy)/2.0,0,dt,2,0,0); // need p_inf setup
+        riemann solution(eos[0]->get_gamma(),eos[1]->get_gamma(),lState,rState,1,-1.5*(dx+dy)/2.0,1.5*(dx+dy)/2.0,0,dt,2,eos[0]->get_pInf(),eos[1]->get_pInf()); // need p_inf setup
         std::array<double,4> result = solution.interfaceRiemann(left);
         //std::array<std::array<double,4>,2> result = HLLCStates(lState,rState,eos[0]);
         //print_state(result[0]); print_state(result[1]);
@@ -975,7 +1057,7 @@ void solver::GFFastSweeping(){
         }
 
         setBCs(fluid1);
-        transmissiveBC(fluid2);
+        setBCs(fluid2);
         
     }
 }
@@ -1140,14 +1222,14 @@ void solver::MUSCL(bool direction,fluid& f, EOS* eos){
     updUBars(PRIM,direction,f,eos);
 
     if (direction == XDIR){
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.fluxesX.size(); ++i){
             for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
                 f.fluxesX[i][j] = HLLC(f.uBarRX[i][j],f.uBarLX[i][j+1],eos,i,j,XDIR);
             }
         }
     } else {
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.fluxesY[0].size(); ++j){
             for (size_t i = 0; i < f.fluxesY.size(); ++i){
                 f.fluxesY[i][j] = HLLC(f.uBarRY[i][j],f.uBarLY[i+1][j],eos,i,j,YDIR);
@@ -1267,7 +1349,7 @@ std::array<double,4> solver::HLLC(std::array<double,4> left,std::array<double,4>
 void solver::pointsUpdate(bool direction, fluid& f){
     int fl1 = (&f == &fluid1) ? -1 : 1;
     if (direction == XDIR){
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=nG; i < f.u.size()-nG; ++i){
             for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
                 //std::cout << (dt / dx) * (fluxesX[i-nG+1] - fluxesX[i-nG])[0] << std::endl;
@@ -1281,7 +1363,7 @@ void solver::pointsUpdate(bool direction, fluid& f){
             }
         }
     } else {
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=nG; j < f.u[0].size()-nG; ++j){
             for (size_t i = nG; i < f.u.size() - nG; ++i) {
                 //std::cout << (dt / dx) * (fluxesX[i-nG+1] - fluxesX[i-nG])[0] << std::endl;
@@ -1309,7 +1391,7 @@ void solver::RK2(bool direction,fluid& f,EOS* eos){
         f.uPlus1 = f.u; // stores new u as uPlus1
         this->fluxMethod(XDIR,f,eos); // calculates fluxes for new u
 
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = nG; i < f.u.size() - nG; ++i){
             for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
                 f.uPlus1[i][j] = 0.5*(uStored[i][j]+f.uPlus1[i][j]) - 0.5 * (dt / dx) * (f.fluxesX[i-nG][j-nG+1] - f.fluxesX[i-nG][j-nG]); // flux[i + 1] and flux[i] for the update
@@ -1320,7 +1402,7 @@ void solver::RK2(bool direction,fluid& f,EOS* eos){
         f.uPlus1 = f.u; // stores new u as uPlus1
         this->fluxMethod(YDIR,f,eos); // calculates fluxes for new u
 
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = nG; j < f.u[0].size() - nG; ++j){
             for (size_t i = nG; i < f.u.size() - nG; ++i) {
                 f.uPlus1[i][j] = 0.5*(uStored[i][j]+f.uPlus1[i][j]) - 0.5 * (dt / dx) * (f.fluxesY[i-nG+1][j-nG] - f.fluxesY[i-nG][j-nG]); // flux[i + 1] and flux[i] for the update
@@ -1451,80 +1533,273 @@ void solver::phiUpdate(int splitFlip){
     double uVal;
 
     phiOld = phi;
-    if (splitFlip%2 == 0){
-        for (std::vector<double>::size_type i = nG-1; i < phi.size()-nG+1; ++i){
-            for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
-                if (phi[i][j] <= 0){
-                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
-                } else {
-                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
-                }
+    // if (splitFlip%2 == 0){
+    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){
+    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
+    //             if (phi[i][j] <= 0){
+    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
+    //             } else {
+    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
+    //             }
 
-                if (uVal >= 0){
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
+    //             if (uVal >= 0){
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
+    //             } else {
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+    //             }
+    //         }
+    //     }
+
+    //     phi = phiPlus1;
+    //     phiBC();
+    //     //print_arr(u,RHO);
+    //     //std::cout << "phiX updated" << std::endl;
+    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){ // this is the part that causes vx to grow
+    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
+    //             if (phi[i][j] <= 0){
+    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
+    //             } else {
+    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
+    //             }
+                
+    //             if (uVal >= 0){
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
+    //             } else {
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+    //             }
+    //         }
+    //     }
+
+    //     phi = phiPlus1;
+    // } else {
+    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){ // this is the part that causes vx to grow
+    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
+    //             if (phi[i][j] <= 0){
+    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
+    //             } else {
+    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
+    //             }
+                
+    //             if (uVal >= 0){
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
+    //             } else {
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+    //             }
+    //         }
+    //     }
+
+    //     phi = phiPlus1;
+    //     phiBC();
+
+    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){
+    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
+    //             if (phi[i][j] <= 0){
+    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
+    //             } else {
+    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
+    //             }
+
+    //             if (uVal >= 0){
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
+    //             } else {
+    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+    //             }
+    //         }
+    //     }
+
+    //     phi = phiPlus1;
+    // }
+    auto updatePhi = [&](bool xDir) {
+        // Choose the appropriate time-space factor and index shifts.
+        double factor = xDir ? (dt / dx) : (dt / dy);
+        for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i) {
+            for (std::vector<double>::size_type j = nG; j < phi[0].size()-nG; ++j) {
+                double uVal;
+                // Pick the velocity component based on the direction.
+                if (phi[i][j] <= 0) {
+                    uVal = xDir ? eos[0]->consvToPrim(fluid1.u[i][j])[UX]
+                                : eos[0]->consvToPrim(fluid1.u[i][j])[UY];
                 } else {
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                    uVal = xDir ? eos[1]->consvToPrim(fluid2.u[i][j])[UX]
+                                : eos[1]->consvToPrim(fluid2.u[i][j])[UY];
+                }
+    
+                // Apply the upwind update based on the sign of uVal.
+                if (uVal >= 0) {
+                    if (xDir) {
+                        // x-direction: use j-1
+                        phiPlus1[i][j] = phi[i][j] - uVal * factor * (phi[i][j] - phi[i][j-1]);
+                    } else {
+                        // y-direction: use i-1
+                        phiPlus1[i][j] = phi[i][j] - uVal * factor * (phi[i][j] - phi[i-1][j]);
+                    }
+                } else {
+                    if (xDir) {
+                        // x-direction: use j+1
+                        phiPlus1[i][j] = phi[i][j] - uVal * factor * (phi[i][j+1] - phi[i][j]);
+                    } else {
+                        // y-direction: use i+1
+                        phiPlus1[i][j] = phi[i][j] - uVal * factor * (phi[i+1][j] - phi[i][j]);
+                    }
                 }
             }
         }
-
+    };
+    
+    // Update ordering depends on the splitFlip value.
+    if (splitFlip % 2 == 0) {
+        updatePhi(true);   // Update in x-direction.
         phi = phiPlus1;
         phiBC();
-        //print_arr(u,RHO);
-        //std::cout << "phiX updated" << std::endl;
-        for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){ // this is the part that causes vx to grow
-            for (std::vector<double>::size_type j = nG-1; j < phi[0].size() - nG+1; ++j) {
-                if (phi[i][j] <= 0){
-                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
-                } else {
-                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
-                }
-                
-                if (uVal >= 0){
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
-                } else {
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-                }
-            }
-        }
-
+        updatePhi(false);  // Then update in y-direction.
         phi = phiPlus1;
     } else {
-        for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){ // this is the part that causes vx to grow
-            for (std::vector<double>::size_type j = nG-1; j < phi[0].size() - nG+1; ++j) {
-                if (phi[i][j] <= 0){
-                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
-                } else {
-                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
-                }
-                
-                if (uVal >= 0){
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
-                } else {
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-                }
-            }
-        }
-
+        updatePhi(false);  // Update in y-direction first.
         phi = phiPlus1;
         phiBC();
+        updatePhi(true);   // Then update in x-direction.
+        phi = phiPlus1;
+    }
 
-        for (std::vector<double>::size_type i = nG-1; i < phi.size()-nG+1; ++i){
+    // identify freshly cleared cells
+    for (size_t i = 0; i<phiOld.size(); ++i){
+        for (size_t j = 0; j < phiOld[0].size(); ++j){
+            if (phi[i][j]*phiOld[i][j] < 0){
+                std::array<int,2> coord = {i,j};
+                freshlyCleared.push_back(coord);
+            }
+        }
+    }
+
+    phiBC();
+}
+
+void solver::phiMUSCLupdate(int splitFlip){
+
+    double uVal;
+
+    phiOld = phi;
+
+    // Define the van Leer limiter.
+    auto vanleer = [](double slp) {
+        if (slp <= 0 || slp == INFINITY){
+            return 0.0;
+        } else {
+            return std::min(2.0*slp/(1.0+slp),2.0/(1+slp));
+        }
+    };
+
+    // Lambda to update phi using MUSCL reconstruction with the van Leer limiter.
+    auto updatePhi = [&](bool xDir) {
+        // Determine the spatial factor (dt/dx or dt/dy)
+        double factor = xDir ? (dt / dx) : (dt / dy);
+
+        // Loop over interior cells.
+        for (std::vector<double>::size_type i = nG; i < phi.size() - nG; ++i) {
             for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
-                if (phi[i][j] <= 0){
-                    uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
-                } else {
-                    uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
-                }
+                double uVal;
+                // Select the proper velocity component based on the sign of phi and direction.
+                if (phi[i][j] <= 0)
+                    uVal = xDir ? eos[0]->consvToPrim(fluid1.u[i][j])[UX]
+                                : eos[0]->consvToPrim(fluid1.u[i][j])[UY];
+                else
+                    uVal = xDir ? eos[1]->consvToPrim(fluid2.u[i][j])[UX]
+                                : eos[1]->consvToPrim(fluid2.u[i][j])[UY];
 
-                if (uVal >= 0){
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
+                if (xDir) {
+                    // --- x-direction update ---
+                    double fluxL, fluxR;  // Left and right fluxes.
+                    if (uVal >= 0) {
+                        // Upwind is to the left.
+                        // Reconstruct interface from cell j-1.
+                        double delta_left  = phi[i][j-1] - phi[i][j-2];
+                        double delta_center = phi[i][j]   - phi[i][j-1];
+                        double slope_left  = vanleer(delta_left/delta_center);
+                        double phi_interface_left = phi[i][j-1] + 0.5 * slope_left;
+
+                        // Reconstruct interface from cell j.
+                        double delta_center2 = phi[i][j]   - phi[i][j-1];
+                        double delta_right   = phi[i][j+1] - phi[i][j];
+                        double slope_center  = vanleer(delta_center2/delta_right);
+                        double phi_interface_right = phi[i][j] - 0.5 * slope_center;
+
+                        fluxL = uVal * phi_interface_left;
+                        fluxR = uVal * phi_interface_right;
+                    } else {
+                        // Upwind is to the right.
+                        // Reconstruct interface from cell j+1.
+                        double delta_center = phi[i][j+1] - phi[i][j];
+                        double delta_right  = phi[i][j+2] - phi[i][j+1];
+                        double slope_center = vanleer(delta_center/delta_right);
+                        double phi_interface_right = phi[i][j+1] - 0.5 * slope_center;
+
+                        // Reconstruct interface from cell j.
+                        double delta_left   = phi[i][j]   - phi[i][j-1];
+                        double delta_center2= phi[i][j+1] - phi[i][j];
+                        double slope_left   = vanleer(delta_left/delta_center2);
+                        double phi_interface_left = phi[i][j] + 0.5 * slope_left;
+
+                        fluxL = uVal * phi_interface_left;
+                        fluxR = uVal * phi_interface_right;
+                    }
+                    // Conservative update in x-direction.
+                    phiPlus1[i][j] = phi[i][j] - factor * (fluxR - fluxL);
                 } else {
-                    phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
+                    // --- y-direction update ---
+                    double fluxD, fluxU;  // Downward and upward fluxes.
+                    if (uVal >= 0) {
+                        // Upwind is downward.
+                        // Reconstruct interface from cell i-1.
+                        double delta_down  = phi[i-1][j] - phi[i-2][j];
+                        double delta_center= phi[i][j]   - phi[i-1][j];
+                        double slope_down  = vanleer(delta_down/delta_center);
+                        double phi_interface_down = phi[i-1][j] + 0.5 * slope_down;
+
+                        // Reconstruct interface from cell i.
+                        double delta_center2 = phi[i][j]   - phi[i-1][j];
+                        double delta_up      = phi[i+1][j] - phi[i][j];
+                        double slope_center  = vanleer(delta_center2/delta_up);
+                        double phi_interface_up = phi[i][j] - 0.5 * slope_center;
+
+                        fluxD = uVal * phi_interface_down;
+                        fluxU = uVal * phi_interface_up;
+                    } else {
+                        // Upwind is upward.
+                        // Reconstruct interface from cell i+1.
+                        double delta_center = phi[i+1][j] - phi[i][j];
+                        double delta_up     = phi[i+2][j] - phi[i+1][j];
+                        double slope_center = vanleer(delta_center/delta_up);
+                        double phi_interface_up = phi[i+1][j] - 0.5 * slope_center;
+
+                        // Reconstruct interface from cell i.
+                        double delta_down   = phi[i][j]   - phi[i-1][j];
+                        double delta_center2= phi[i+1][j] - phi[i][j];
+                        double slope_down   = vanleer(delta_down/delta_center2);
+                        double phi_interface_down = phi[i][j] + 0.5 * slope_down;
+
+                        fluxD = uVal * phi_interface_down;
+                        fluxU = uVal * phi_interface_up;
+                    }
+                    // Conservative update in y-direction.
+                    phiPlus1[i][j] = phi[i][j] - factor * (fluxU - fluxD);
                 }
             }
         }
+    };
 
+    
+    // Update ordering depends on the splitFlip value.
+    if (splitFlip % 2 == 0) {
+        updatePhi(true);   // Update in x-direction.
+        phi = phiPlus1;
+        phiBC();
+        updatePhi(false);  // Then update in y-direction.
+        phi = phiPlus1;
+    } else {
+        updatePhi(false);  // Update in y-direction first.
+        phi = phiPlus1;
+        phiBC();
+        updatePhi(true);   // Then update in x-direction.
         phi = phiPlus1;
     }
 
@@ -1575,6 +1850,10 @@ void solver::neighbourAvg(fluid& f, int i, int j){
         //throw std::runtime_error("freshly cleared cell has no valid neighbours");
     }
 }
+
+// void solver::fixFCcell(){
+
+// }
 
 void solver::fixFreshlyCleared(){
 for (std::array<int,2> cell : freshlyCleared){
@@ -1742,7 +2021,7 @@ void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int max
         return;
     int n = phi[0].size();
 
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for num_threads(6) collapse(2)
     for (int i = nG; i < m - nG; i++) {
         for (int j = nG; j < n - nG; j++) {
             if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
@@ -1803,14 +2082,14 @@ void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int max
 
 void solver::calcHalfSlopes(bool prim, bool direction, fluid& f){
     if (direction == XDIR){
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.halfSlopesX.size(); ++i){
             for (size_t j = 0; j < f.halfSlopesX[0].size(); ++j){ // halfslopes[i] = halfslopes i-1/2
                 f.halfSlopesX[i][j] = (prim == 0) ? f.u[i+nG][j+1]-f.u[i+nG][j] : f.uPrim[i+nG][j+1]-f.uPrim[i+nG][j];
             }
         }
     } else {
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.halfSlopesY[0].size(); ++j){
             for (size_t i = 0; i < f.halfSlopesY.size(); ++i){ // halfslopes[i] = halfslopes i-1/2
                 f.halfSlopesY[i][j] = (prim == 0) ? f.u[i+1][j+nG]-f.u[i][j+nG] : f.uPrim[i+1][j+nG]-f.uPrim[i][j+nG];
@@ -1822,14 +2101,14 @@ void solver::calcHalfSlopes(bool prim, bool direction, fluid& f){
 
 void solver::calcr(bool direction,fluid& f){
     if (direction == XDIR){
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.rX.size(); ++i){
             for (size_t j = 0; j < f.rX[0].size(); ++j){
                 f.rX[i][j] = elementDivide(f.halfSlopesX[i][j],f.halfSlopesX[i][j+1]);
             }
         }
     } else {
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.rY[0].size(); ++j){
             for (size_t i = 0; i < f.rY.size(); ++i){
                 f.rY[i][j] = elementDivide(f.halfSlopesY[i][j],f.halfSlopesY[i+1][j]);
@@ -1860,28 +2139,28 @@ void solver::calcr(bool direction,fluid& f){
 
 void solver::calcUBars(bool prim, bool direction, fluid& f, EOS* eos){ // calculates for all u except leftmost cell
     if (direction == XDIR){
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = 0; i < f.uBarLX.size(); ++i){
             for (size_t j = 0; j < f.uBarLX[0].size(); ++j){
                 f.uBarLX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
                 f.uBarRX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
             }
         }
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = 0; i < f.sStarsX.size(); ++i){
             for (size_t j = 0; j < f.sStarsX[0].size(); ++j){
                 f.sStarsX[i][j] = (prim == 0) ? 0.5*(eos->consvToPrim(f.uBarRX[i][j])[UX]+eos->consvToPrim(f.uBarLX[i][j+1])[UX]) : 0.5*(f.uBarRX[i][j][UX]+f.uBarLX[i][j+1][UX]);
             }
         }
     } else {
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = 0; j < f.uBarLY[0].size(); ++j){
             for (size_t i = 0; i < f.uBarLY.size(); ++i){
                 f.uBarLY[i][j] = (prim == 0) ? f.u[i+nG-1][j+nG] - 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j])) : f.uPrim[i+nG-1][j+nG] - 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j]));
                 f.uBarRY[i][j] = (prim == 0) ? f.u[i+nG-1][j+nG] + 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j])) : f.uPrim[i+nG-1][j+nG] + 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j]));
             }
         }
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = 0; j < f.sStarsY[0].size(); ++j){
             for (size_t i = 0; i < f.sStarsY.size(); ++i){
                 f.sStarsY[i][j] = (prim == 0) ? 0.5*(eos->consvToPrim(f.uBarRY[i][j])[UY]+eos->consvToPrim(f.uBarLY[i+1][j])[UY]) : 0.5*(f.uBarRY[i][j][UY]+f.uBarLY[i+1][j][UY]);
@@ -1909,7 +2188,7 @@ std::array<double,4> multiplyMatrixVector(
 void solver::updUBars(bool prim,bool direction, fluid& f, EOS* eos){
     if (direction == XDIR){
         if (prim == false){
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
                 for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
                     f.uBarLupdX[i][j] = f.uBarLX[i][j]-0.5*(dt/dx)*(flux(eos->consvToPrim(f.uBarRX[i][j]),eos,XDIR)-flux(eos->consvToPrim(f.uBarLX[i][j]),eos,XDIR));
@@ -1917,7 +2196,7 @@ void solver::updUBars(bool prim,bool direction, fluid& f, EOS* eos){
                 }
             }
         } else {
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
                 for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
                     double v = f.uPrim[i+nG][j+nG-1][UX]; double rho = f.uPrim[i+nG][j+nG-1][RHO];
@@ -1937,7 +2216,7 @@ void solver::updUBars(bool prim,bool direction, fluid& f, EOS* eos){
         f.uBarRX = f.uBarRupdX;
     } else {
         if (prim == false){
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t j = 0; j<f.uBarLupdY[0].size(); ++j){
                 for (size_t i = 0; i<f.uBarLupdY.size(); ++i){
                     f.uBarLupdY[i][j] = f.uBarLY[i][j]-0.5*(dt/dy)*(flux(eos->consvToPrim(f.uBarRY[i][j]),eos,YDIR)-flux(eos->consvToPrim(f.uBarLY[i][j]),eos,YDIR));
@@ -1945,7 +2224,7 @@ void solver::updUBars(bool prim,bool direction, fluid& f, EOS* eos){
                 }
             }
         } else {
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t j = 0; j<f.uBarLupdY[0].size(); ++j){
                 for (size_t i = 0; i<f.uBarLupdY.size(); ++i){
                     double v = f.uPrim[i+nG-1][j+nG][UY]; double rho = f.uPrim[i+nG-1][j+nG][RHO];
@@ -2118,6 +2397,7 @@ solver::solver(double x_0, double x_1, double y_0, double y_1, double t0, double
     
     assert(t1>t0);
     timeMulti = ((endTime-startTime) < 1e-2) ? 1000 : 1; // 1.0/(endTime-startTime);
+    
 
     dx = (x1 - x0)/nCellsX;
     dy = (y1 - y0)/nCellsY;

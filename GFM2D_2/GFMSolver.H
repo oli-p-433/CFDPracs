@@ -17,6 +17,9 @@ class solver{
 
         bool PRIM;
 
+        double timeMulti;
+
+
 
         void init(std::vector< std::vector< std::array<double,4> > >, fluid&);
         std::array<double,4> set_vals(int, double, double, double, double);
@@ -29,10 +32,9 @@ class solver{
         void calcInterfaceNormals(fluid&);
         void calcInterface(fluid&);
         void interpInterfaceStates(fluid&);
-        std::array<double,4> bilinear(double,double,fluid&,std::array<double,2>);
-        std::array<double,4> bilinear2(double,double,fluid&,std::array<double,2>);
-        std::array<double,4> bilinear3(double,double,fluid&,std::array<double,2>);
+
         std::array<double,4> bilinear4(double,double,fluid&,std::array<double,2>,int);
+        std::array<double,4> bilinear5(double,double,fluid&,std::array<double,2>,int);
         void interfaceRiem(fluid&);
         void resolveVelocities(fluid&);
         void calcStarStates(fluid&);
@@ -97,6 +99,7 @@ class solver{
 
         void phiBC();
         void phiUpdate(int);
+        void phiMUSCLupdate(int);
 
         // slope limiting
         void calcHalfSlopes(bool,bool,fluid&);
@@ -169,7 +172,6 @@ class solver{
         fluid fluid1, fluid2;
         boundary bound;
 
-        double timeMulti;
         int nCellsX, nCellsY, nG;
     
         double dx;
@@ -201,5 +203,7 @@ class solver{
         std::vector<std::array<int, 2>> freshlyCleared;
 
         std::vector< std::vector < double > > phiGrads;
+
+        double pInf1, pInf2;
 };
 
