@@ -24,9 +24,6 @@ fluid::fluid(int nX, int nY, int nG)
         resizeVector(uBarLY,nCellsY+2,nCellsX);
         resizeVector(uBarRY,nCellsY+2,nCellsX);
         resizeVector(uBarLupdY,nCellsY+2,nCellsX);
-        resizeVector(uBarRupdY,nCellsY+2,nCellsX);
-
-        resizeVector(uExtrap,nCellsY+2*nG,nCellsX+2*nG);
-        
+        resizeVector(uBarRupdY,nCellsY+2,nCellsX);        
 
 }

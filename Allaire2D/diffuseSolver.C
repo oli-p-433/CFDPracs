@@ -5,6 +5,8 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <omp.h>
+
 
 void solver::run(){
     alpha = 0;
@@ -12,6 +14,8 @@ void solver::run(){
 
     setBCs(f);
     std::cout << "set BCs" << std::endl;
+
+    writeData();
 
     splitFlip = 0;
 
@@ -26,7 +30,6 @@ void solver::run(){
         double sub = static_cast<double>(nSubcycle);
 
         splitFlip++;
-        //double halfDt = dt/2.0;
         double halfDt = dt;
         if (splitFlip%2 == 0){
             
@@ -100,12 +103,14 @@ void solver::SLIC(bool direction){
     updUBars(PRIM,direction);
 
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = 0; i < f.fluxesX.size(); ++i) {
             for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
                 f.fluxesX[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],XDIR)),eos[0],XDIR)+LF(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],XDIR)); // fluxesX stored in conserved variable form
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = 0; j < f.fluxesY[0].size(); ++j) {
             for (size_t i = 0; i < f.fluxesY.size(); ++i){
                 f.fluxesY[i][j] = 0.5*(flux(eos[0]->consvToPrim(laxFhalf(f.uBarRY[i][j],f.uBarLY[i+1][j],eos[0],YDIR)),eos[0],YDIR)+LF(f.uBarRY[i][j],f.uBarLY[i+1][j],eos[0],YDIR)); // fluxesX stored in conserved variable form
@@ -138,12 +143,14 @@ void solver::MUSCL(bool direction){
     updUBars(PRIM,direction);
 
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.fluxesX.size(); ++i){
             for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
                 f.fluxesX[i][j] = HLLC(f.uBarRX[i][j],f.uBarLX[i][j+1],eos[0],i,j,XDIR);
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.fluxesY[0].size(); ++j){
             for (size_t i = 0; i < f.fluxesY.size(); ++i){
                 f.fluxesY[i][j] = HLLC(f.uBarRY[i][j],f.uBarLY[i+1][j],eos[0],i,j,YDIR);
@@ -154,12 +161,14 @@ void solver::MUSCL(bool direction){
 
 void solver::HLLCGodunov(bool direction){
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.fluxesX.size(); ++i){
             for (size_t j = 0; j < f.fluxesX[0].size(); ++j){
                 f.fluxesX[i][j] = HLLC(f.u[i+nG][j+nG-1],f.u[i+nG][j+nG],eos[0],i,j,XDIR);
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.fluxesY[0].size(); ++j){
             for (size_t i = 0; i < f.fluxesY.size(); ++i){
                 f.fluxesY[i][j] = HLLC(f.u[i+nG-1][j+nG],f.u[i+nG][j+nG],eos[0],i,j,YDIR);
@@ -289,6 +298,7 @@ void solver::setBCs(){
 
 void solver::pointsUpdate(bool direction){
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=nG; i < f.u.size()-nG; ++i){
             for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
                 //std::cout << (dt / dx) * (fluxesX[i-nG+1] - fluxesX[i-nG])[0] << std::endl;
@@ -296,6 +306,7 @@ void solver::pointsUpdate(bool direction){
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=nG; j < f.u[0].size()-nG; ++j){
             for (size_t i = nG; i < f.u.size() - nG; ++i) {
                 //std::cout << (dt / dx) * (fluxesX[i-nG+1] - fluxesX[i-nG])[0] << std::endl;
@@ -317,6 +328,7 @@ void solver::RK2(bool direction){
         f.uPlus1 = f.u; // stores new u as uPlus1
         this->fluxMethod(XDIR); // calculates fluxes for new u
 
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = nG; i < f.u.size() - nG; ++i){
             for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
                 f.uPlus1[i][j] = 0.5*(uStored[i][j]+f.uPlus1[i][j]) - 0.5 * (dt / dx) * (f.fluxesX[i-nG][j-nG+1] - f.fluxesX[i-nG][j-nG]); // flux[i + 1] and flux[i] for the update
@@ -327,6 +339,7 @@ void solver::RK2(bool direction){
         f.uPlus1 = f.u; // stores new u as uPlus1
         this->fluxMethod(YDIR); // calculates fluxes for new u
 
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = nG; j < f.u[0].size() - nG; ++j){
             for (size_t i = nG; i < f.u.size() - nG; ++i) {
                 f.uPlus1[i][j] = 0.5*(uStored[i][j]+f.uPlus1[i][j]) - 0.5 * (dt / dx) * (f.fluxesY[i-nG+1][j-nG] - f.fluxesY[i-nG][j-nG]); // flux[i + 1] and flux[i] for the update
@@ -375,6 +388,7 @@ std::vector< std::array<double,6> > solver::sourceTerm(const std::vector< std::a
 
 void solver::allaireSource(bool direction, double timestep){
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = nG; i < f.u.size() - nG; ++i) {
             for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
                 //double sDiff = (u[i][XMOM]<0) ? (sStarsX[i-nG+1]-sStarsX[i-nG]) : (sStarsX[i-nG+2]-sStarsX[i-nG+1]);
@@ -384,6 +398,7 @@ void solver::allaireSource(bool direction, double timestep){
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = nG; j < f.u[0].size() - nG; ++j) {
             for (size_t i = nG; i < f.u.size() - nG; ++i) {
                 //double sDiff = (u[i][XMOM]<0) ? (sStarsX[i-nG+1]-sStarsX[i-nG]) : (sStarsX[i-nG+2]-sStarsX[i-nG+1]);
@@ -455,12 +470,14 @@ std::array<double,6> solver::laxFhalf(std::array<double,6> ui, std::array<double
 
 void solver::calcHalfSlopes(bool prim, bool direction){
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.halfSlopesX.size(); ++i){
             for (size_t j = 0; j < f.halfSlopesX[0].size(); ++j){ // halfslopes[i] = halfslopes i-1/2
                 f.halfSlopesX[i][j] = (prim == 0) ? f.u[i+nG][j+1]-f.u[i+nG][j] : f.uPrim[i+nG][j+1]-f.uPrim[i+nG][j];
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.halfSlopesY[0].size(); ++j){
             for (size_t i = 0; i < f.halfSlopesY.size(); ++i){ // halfslopes[i] = halfslopes i-1/2
                 f.halfSlopesY[i][j] = (prim == 0) ? f.u[i+1][j+nG]-f.u[i][j+nG] : f.uPrim[i+1][j+nG]-f.uPrim[i][j+nG];
@@ -472,12 +489,14 @@ void solver::calcHalfSlopes(bool prim, bool direction){
 
 void solver::calcr(bool direction){
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i=0; i < f.rX.size(); ++i){
             for (size_t j = 0; j < f.rX[0].size(); ++j){
                 f.rX[i][j] = elementDivide(f.halfSlopesX[i][j],f.halfSlopesX[i][j+1]);
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j=0; j < f.rY[0].size(); ++j){
             for (size_t i = 0; i < f.rY.size(); ++i){
                 f.rY[i][j] = elementDivide(f.halfSlopesY[i][j],f.halfSlopesY[i+1][j]);
@@ -508,24 +527,28 @@ void solver::calcr(bool direction){
 
 void solver::calcUBars(bool prim, bool direction){ // calculates for all u except leftmost cell
     if (direction == XDIR){
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = 0; i < f.uBarLX.size(); ++i){
             for (size_t j = 0; j < f.uBarLX[0].size(); ++j){
                 f.uBarLX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] - 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
                 f.uBarRX[i][j] = (prim == 0) ? f.u[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1])) : f.uPrim[i+nG][j+nG-1] + 0.5 * slopeLim(f.rX[i][j]) * (0.5 * (f.halfSlopesX[i][j]+f.halfSlopesX[i][j+1]));
             }
         }
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t i = 0; i < f.sStarsX.size(); ++i){
             for (size_t j = 0; j < f.sStarsX[0].size(); ++j){
                 f.sStarsX[i][j] = (prim == 0) ? 0.5*(eos[0]->consvToPrim(f.uBarRX[i][j])[UX]+eos[0]->consvToPrim(f.uBarLX[i][j+1])[UX]) : 0.5*(f.uBarRX[i][j][UX]+f.uBarLX[i][j+1][UX]);
             }
         }
     } else {
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = 0; j < f.uBarLY[0].size(); ++j){
             for (size_t i = 0; i < f.uBarLY.size(); ++i){
                 f.uBarLY[i][j] = (prim == 0) ? f.u[i+nG-1][j+nG] - 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j])) : f.uPrim[i+nG-1][j+nG] - 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j]));
                 f.uBarRY[i][j] = (prim == 0) ? f.u[i+nG-1][j+nG] + 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j])) : f.uPrim[i+nG-1][j+nG] + 0.5 * slopeLim(f.rY[i][j]) * (0.5 * (f.halfSlopesY[i][j]+f.halfSlopesY[i+1][j]));
             }
         }
+        #pragma omp parallel for num_threads(6) collapse(2)
         for (size_t j = 0; j < f.sStarsY[0].size(); ++j){
             for (size_t i = 0; i < f.sStarsY.size(); ++i){
                 f.sStarsY[i][j] = (prim == 0) ? 0.5*(eos[0]->consvToPrim(f.uBarRY[i][j])[UY]+eos[0]->consvToPrim(f.uBarLY[i+1][j])[UY]) : 0.5*(f.uBarRY[i][j][UY]+f.uBarLY[i+1][j][UY]);
@@ -553,6 +576,7 @@ std::array<double,6> multiplyMatrixVector(
 void solver::updUBars(bool prim,bool direction){
     if (direction == XDIR){
         if (prim == false){
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
                 for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
                     f.uBarLupdX[i][j] = f.uBarLX[i][j]-0.5*(dt/dx)*(flux(eos[0]->consvToPrim(f.uBarRX[i][j]),eos[0],XDIR)-flux(eos[0]->consvToPrim(f.uBarLX[i][j]),eos[0],XDIR));
@@ -560,9 +584,10 @@ void solver::updUBars(bool prim,bool direction){
                 }
             }
         } else {
-            std::vector< std::vector <double> > B;
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t i = 0; i<f.uBarLupdX.size(); ++i){
                 for (size_t j = 0; j<f.uBarLupdX[0].size(); ++j){
+                    std::vector< std::vector <double> > B;
                     double v = f.uPrim[i+nG][j+nG-1][UX]; double rho = f.uPrim[i+nG][j+nG-1][RHO1]+f.uPrim[i+nG][j+nG-1][RHO2];
                     B = {   {v, 0,  0,  0,                           0,                              0},
                             {0, v,  0,  f.uPrim[i+nG][j+nG-1][RHO1], 0,                              0},
@@ -582,6 +607,7 @@ void solver::updUBars(bool prim,bool direction){
         f.uBarRX = f.uBarRupdX;
     } else {
         if (prim == false){
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t j = 0; j<f.uBarLupdY[0].size(); ++j){
                 for (size_t i = 0; i<f.uBarLupdY.size(); ++i){
                     f.uBarLupdY[i][j] = f.uBarLY[i][j]-0.5*(dt/dy)*(flux(eos[0]->consvToPrim(f.uBarRY[i][j]),eos[0],YDIR)-flux(eos[0]->consvToPrim(f.uBarLY[i][j]),eos[0],YDIR));
@@ -589,9 +615,10 @@ void solver::updUBars(bool prim,bool direction){
                 }
             }
         } else {
-            std::vector< std::vector <double> > B;
+            #pragma omp parallel for num_threads(6) collapse(2)
             for (size_t j = 0; j<f.uBarLupdY[0].size(); ++j){
                 for (size_t i = 0; i<f.uBarLupdY.size(); ++i){
+                    std::vector< std::vector <double> > B;
                     double v = f.uPrim[i+nG-1][j+nG][UY]; double rho = f.uPrim[i+nG-1][j+nG][RHO1]+f.uPrim[i+nG-1][j+nG][RHO2];
                     B = {   {v, 0,  0,  0,                           0,                              0},
                             {0, v,  0,  0, f.uPrim[i+nG-1][j+nG][RHO1],                              0},

@@ -21,7 +21,6 @@ class fluid{
         std::vector < std::array<double,4> > riemInterfaceStates;
         std::vector < std::array < std::array<double,2>,2> > resolvedVelocities;
         std::vector < std::array<double,4> > starStates;
-        std::vector < std::vector < std::array < double,4 > > > uExtrap;
         std::vector < double > interfacePhis;
 
         fluid(int,int,int);

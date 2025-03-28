@@ -101,6 +101,7 @@ void solver::MUSCL(){
     }
 }
 
+
 void solver::HLLCGodunov(){
 
     for (size_t i=0; i < fluxes.size(); ++i){
@@ -113,27 +114,34 @@ std::array<double,5> solver::HLLC(std::array<double,5> left,std::array<double,5>
     std::array<double,5> LPrim = eos->consvToPrim(left);
     std::array<double,5> RPrim = eos->consvToPrim(right);
 
+    double rhoL = left[RHO1]+left[RHO2]; double rhoR = right[RHO1]+right[RHO2];
+
     // Pressure - based wavespeed estimation
     /*
-    double pEst = 0.5*(LPrim[PRES]+RPrim[PRES])-0.5*(RPrim[UX]-LPrim[UX])*0.25*(LPrim[RHO]+RPrim[RHO])*(eos->calcSoundSpeed(LPrim)+eos->calcSoundSpeed(RPrim));
+    double xiL = left[FRAC]*(1/(eos->get_gamma()[1]-1)) + (1-left[FRAC])*(1/(eos->get_gamma()[0]-1));
+    double xiR = right[FRAC]*(1/(eos->get_gamma()[1]-1)) + (1-right[FRAC])*(1/(eos->get_gamma()[0]-1));
+
+    double gammaL = 1 + 1/xiL; double gammaR = 1 + 1/xiR;
+    
+    double pEst = 0.5*(LPrim[PRES]+RPrim[PRES])-0.5*(RPrim[UX]-LPrim[UX])*0.25*(rhoL+rhoR)*(eos->calcSoundSpeed(LPrim)+eos->calcSoundSpeed(RPrim));
     double qL,qR;
     
-    qL = (pEst < LPrim[PRES]) ? 1 : sqrt(1+((eos->get_gamma()+1)/(2.0*eos->get_gamma()))*((pEst/LPrim[PRES])-1));
-    qR = (pEst < RPrim[PRES]) ? 1 : sqrt(1+((eos->get_gamma()+1)/(2.0*eos->get_gamma()))*((pEst/RPrim[PRES])-1));
+    qL = (pEst < LPrim[PRES]) ? 1 : sqrt(1+((gammaL+1)/(2.0*gammaL))*((pEst/LPrim[PRES])-1));
+    qR = (pEst < RPrim[PRES]) ? 1 : sqrt(1+((gammaR+1)/(2.0*gammaR))*((pEst/RPrim[PRES])-1));
 
     SL = LPrim[UX] - eos->calcSoundSpeed(LPrim)*qL;
     SR = RPrim[UX] + eos->calcSoundSpeed(RPrim)*qR;
     */
+    
 
     // easy wavespeed
     SL = std::min(LPrim[UX] - eos->calcSoundSpeed(LPrim), RPrim[UX] - eos->calcSoundSpeed(RPrim));
     SR = std::max(LPrim[UX] + eos->calcSoundSpeed(LPrim), RPrim[UX] + eos->calcSoundSpeed(RPrim));
+
+
     if ((std::isnan(SL) == 1) || (std::isnan(SR) == 1)){
         std::cout << "SL SR " << SL << " " << SR << std::endl;
     }
-
-    double rhoL = left[RHO1]+left[RHO2];
-    double rhoR = right[RHO1]+right[RHO2];
 
     // Calculate the numerator of sStar
     double numerator = RPrim[PRES] - LPrim[PRES] + rhoL * LPrim[UX] * (SL - LPrim[UX]) - rhoR * RPrim[UX] * (SR - RPrim[UX]);
@@ -272,7 +280,7 @@ void solver::allaireSource(double timestep){
     for (std::vector<double>::size_type i = nGhost; i < u.size() - nGhost; ++i) {
         
         // Murrone & guillard source term (compaction)
-        /*
+        
         std::array<double,5> uPrevPrim = eos[0]->consvToPrim(uPrev[i]);
         double r1 = uPrevPrim[1]/uPrevPrim[0];
         double r2 = uPrevPrim[2]/(1-uPrevPrim[0]);
@@ -284,10 +292,10 @@ void solver::allaireSource(double timestep){
         double pref = uPrevPrim[0]*(1-uPrevPrim[0])*(r2*cs2-r1*cs1)/(uPrevPrim[1]*cs1+uPrevPrim[2]*cs2);
 
         uPlus1[i][FRAC] = u[i][FRAC] + (timestep/dx) * pref * (sStars[i-nGhost+1]-sStars[i-nGhost]); // flux[i + 1] and flux[i] for the update
-        */
+        
 
         // Original allaire source term
-        uPlus1[i][FRAC] = u[i][FRAC] + (timestep/dx) * uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]); // flux[i + 1] and flux[i] for the update
+        //uPlus1[i][FRAC] = u[i][FRAC] + (timestep/dx) * uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]); // flux[i + 1] and flux[i] for the update
 
         // Heun's method with Allaire source term
         //double K1 = (timestep/dx)* uPrev[i][FRAC] * (sStars[i-nGhost+1]-sStars[i-nGhost]);

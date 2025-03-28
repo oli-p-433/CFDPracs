@@ -1,6 +1,6 @@
 #include "boundary.H"
 
-
+// alpha rho1 rho2 vx vy p
 // Reflective left boundary: update left ghost columns (j = 0 .. nGhost-1)
 // for interior rows (i = nGhost .. nCellsY+nGhost-1).
 void boundary::reflectiveLeftBC(fluid &fluid) {
@@ -10,8 +10,8 @@ void boundary::reflectiveLeftBC(fluid &fluid) {
             fluid.u[i][j] = fluid.u[i][nGhost];
             fluid.uPlus1[i][j] = fluid.u[i][nGhost];
             // Flip the x momentum (index 1)
-            fluid.u[i][j][1] = -fluid.u[i][nGhost][1];
-            fluid.uPlus1[i][j][1] = -fluid.u[i][nGhost][1];
+            fluid.u[i][j][3] = -fluid.u[i][nGhost][3];
+            fluid.uPlus1[i][j][3] = -fluid.u[i][nGhost][3];
         }
     }
 }
@@ -25,8 +25,8 @@ void boundary::reflectiveRightBC(fluid &fluid) {
             fluid.u[i][j] = fluid.u[i][nCellsX + nGhost - 1];
             fluid.uPlus1[i][j] = fluid.u[i][nCellsX + nGhost - 1];
             // Flip the x momentum (index 1)
-            fluid.u[i][j][1] = -fluid.u[i][nCellsX + nGhost - 1][1];
-            fluid.uPlus1[i][j][1] = -fluid.u[i][nCellsX + nGhost - 1][1];
+            fluid.u[i][j][3] = -fluid.u[i][nCellsX + nGhost - 1][3];
+            fluid.uPlus1[i][j][3] = -fluid.u[i][nCellsX + nGhost - 1][3];
         }
     }
 }
@@ -40,8 +40,8 @@ void boundary::reflectiveBottomBC(fluid &fluid) {
             fluid.u[i][j] = fluid.u[nGhost][j];
             fluid.uPlus1[i][j] = fluid.u[nGhost][j];
             // Flip the y momentum (index 2)
-            fluid.u[i][j][2] = -fluid.u[nGhost][j][2];
-            fluid.uPlus1[i][j][2] = -fluid.u[nGhost][j][2];
+            fluid.u[i][j][4] = -fluid.u[nGhost][j][4];
+            fluid.uPlus1[i][j][4] = -fluid.u[nGhost][j][4];
         }
     }
 }
@@ -55,8 +55,8 @@ void boundary::reflectiveTopBC(fluid &fluid) {
             fluid.u[i][j] = fluid.u[nCellsY + nGhost - 1][j];
             fluid.uPlus1[i][j] = fluid.u[nCellsY + nGhost - 1][j];
             // Flip the y momentum (index 2)
-            fluid.u[i][j][2] = -fluid.u[nCellsY + nGhost - 1][j][2];
-            fluid.uPlus1[i][j][2] = -fluid.u[nCellsY + nGhost - 1][j][2];
+            fluid.u[i][j][4] = -fluid.u[nCellsY + nGhost - 1][j][4];
+            fluid.uPlus1[i][j][4] = -fluid.u[nCellsY + nGhost - 1][j][4];
         }
     }
 }
@@ -122,13 +122,13 @@ void boundary::updateBottomLeftCorner(fluid &fluid, bool leftReflective, bool bo
             
             // If the left wall is reflective, flip the x momentum (index 1)
             if (leftReflective) {
-                fluid.u[i][j][1] = -fluid.u[nGhost][nGhost][1];
-                fluid.uPlus1[i][j][1] = -fluid.u[nGhost][nGhost][1];
+                fluid.u[i][j][3] = -fluid.u[nGhost][nGhost][3];
+                fluid.uPlus1[i][j][3] = -fluid.u[nGhost][nGhost][3];
             }
             // If the bottom wall is reflective, flip the y momentum (index 2)
             if (bottomReflective) {
-                fluid.u[i][j][2] = -fluid.u[nGhost][nGhost][2];
-                fluid.uPlus1[i][j][2] = -fluid.u[nGhost][nGhost][2];
+                fluid.u[i][j][4] = -fluid.u[nGhost][nGhost][4];
+                fluid.uPlus1[i][j][4] = -fluid.u[nGhost][nGhost][4];
             }
         }
     }
@@ -141,12 +141,12 @@ void boundary::updateTopRightCorner(fluid &fluid, bool rightReflective, bool top
             fluid.uPlus1[i][j] = fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1];
             
             if (rightReflective) {
-                fluid.u[i][j][1] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][1];
-                fluid.uPlus1[i][j][1] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][1];
+                fluid.u[i][j][3] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][3];
+                fluid.uPlus1[i][j][3] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][3];
             }
             if (topReflective) {
-                fluid.u[i][j][2] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][2];
-                fluid.uPlus1[i][j][2] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][2];
+                fluid.u[i][j][4] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][4];
+                fluid.uPlus1[i][j][4] = -fluid.u[nCellsY + nGhost - 1][nCellsX + nGhost - 1][4];
             }
         }
     }
@@ -164,13 +164,13 @@ void boundary::updateBottomRightCorner(fluid &fluid, bool rightReflective, bool 
             fluid.uPlus1[i][j] = fluid.u[nGhost][nCellsX + nGhost - 1];
             // If the right wall is reflective, flip the x momentum (index 1)
             if (rightReflective) {
-                fluid.u[i][j][1] = -fluid.u[nGhost][nCellsX + nGhost - 1][1];
-                fluid.uPlus1[i][j][1] = -fluid.u[nGhost][nCellsX + nGhost - 1][1];
+                fluid.u[i][j][3] = -fluid.u[nGhost][nCellsX + nGhost - 1][3];
+                fluid.uPlus1[i][j][3] = -fluid.u[nGhost][nCellsX + nGhost - 1][3];
             }
             // If the bottom wall is reflective, flip the y momentum (index 2)
             if (bottomReflective) {
-                fluid.u[i][j][2] = -fluid.u[nGhost][nCellsX + nGhost - 1][2];
-                fluid.uPlus1[i][j][2] = -fluid.u[nGhost][nCellsX + nGhost - 1][2];
+                fluid.u[i][j][4] = -fluid.u[nGhost][nCellsX + nGhost - 1][4];
+                fluid.uPlus1[i][j][4] = -fluid.u[nGhost][nCellsX + nGhost - 1][4];
             }
         }
     }
@@ -188,13 +188,13 @@ void boundary::updateTopLeftCorner(fluid &fluid, bool leftReflective, bool topRe
             fluid.uPlus1[i][j] = fluid.u[nCellsY + nGhost - 1][nGhost];
             // If the left wall is reflective, flip the x momentum (index 1)
             if (leftReflective) {
-                fluid.u[i][j][1] = -fluid.u[nCellsY + nGhost - 1][nGhost][1];
-                fluid.uPlus1[i][j][1] = -fluid.u[nCellsY + nGhost - 1][nGhost][1];
+                fluid.u[i][j][3] = -fluid.u[nCellsY + nGhost - 1][nGhost][3];
+                fluid.uPlus1[i][j][3] = -fluid.u[nCellsY + nGhost - 1][nGhost][3];
             }
             // If the top wall is reflective, flip the y momentum (index 2)
             if (topReflective) {
-                fluid.u[i][j][2] = -fluid.u[nCellsY + nGhost - 1][nGhost][2];
-                fluid.uPlus1[i][j][2] = -fluid.u[nCellsY + nGhost - 1][nGhost][2];
+                fluid.u[i][j][4] = -fluid.u[nCellsY + nGhost - 1][nGhost][4];
+                fluid.uPlus1[i][j][4] = -fluid.u[nCellsY + nGhost - 1][nGhost][4];
             }
         }
     }

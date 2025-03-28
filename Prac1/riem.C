@@ -277,9 +277,9 @@ void riemann::exactRiemannSolution(double pStar, double x_disc){
     for (size_t i = 0; i<uRiem.size(); ++i){
         double x = x0 + (i+0.5)*dx;
         if (x <= wavePos[2]){
-            eExact.push_back(uRiem[i][2]/(uRiem[i][0]*(gamma(1)-1)));
+            eExact.push_back((uRiem[i][2]+gamma(1)*pInfLeft)/(uRiem[i][0]*(gamma(1)-1)));
         } else {
-            eExact.push_back(uRiem[i][2]/(uRiem[i][0]*(gamma(0)-1)));
+            eExact.push_back((uRiem[i][2]+gamma(0)*pInfRight)/(uRiem[i][0]*(gamma(0)-1)));
         }
     }
 

@@ -12,10 +12,10 @@
 
 
 int main(){
-    int nCellsX = 325;
-    int nCellsY = 90;
-    double x0{0}, x1{0.325}, y0{-0.045}, y1{0.045};
-    double startTime = 0.0, endTime = 900e-6;
+    int nCellsX = 800;
+    int nCellsY = 800;
+    double x0{-0.4}, x1{1.6}, y0{-0.4}, y1{1.6};
+    double startTime = 0.0, endTime = 0.3;
 
     double cour{0.8};
     std::cout << "Enter CFL number:"; std::cin >> cour;
@@ -35,7 +35,7 @@ int main(){
     sim.dirName = dirname;
 
 
-    sim.setWriteInterval(50e-6);
+    sim.setWriteInterval(0.05);
 
     sim.setBCs = [&sim](fluid& f) {
         sim.get_boundary().transmissiveTopBC(f);
@@ -57,7 +57,7 @@ int main(){
     }; // because fEuler isnt static
 
     sim.slopeLim = [&sim](std::array<double,6> input){
-        return sim.minbee(input);
+        return sim.vanLeer(input);
     }; // because fEuler isnt static
 
     sim.PRIM = true;
@@ -100,38 +100,55 @@ int main(){
 
             // air-helium (wangB)
             
-            
+            // double vf{1-(1e-6)}, rho1{1.3765}, rho2{0.1380};
+            // if (x < 0.25){
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),0.3948,0,1.57});
+            // } else if (x < 0.4){
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,0,1});
+            // } else if (x < 0.6){
+            //     uInit[i][j] = sim.eos[0]->primToConsv({1-vf,(1-vf),rho2*vf,0,0,1});
+            // } else {
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,0,1});
+            // }
 
-            /*
+            // Wang B angled
+
+            // // Define the rotation angle in radians (35 degrees)
+            double theta = 45 * M_PI / 180.0;
+            // // Compute the projection along the interface normal (rotated by 35°)
+            double p = (x * cos(theta) + y * sin(theta));
+
+
             double vf{1-(1e-6)}, rho1{1.3765}, rho2{0.1380};
-            if (x < 0.1){
-                uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),0.3948,0,1.57});
-            } else if (x < 0.125){
+            // Set the initial velocity fields based on the location relative to the interface
+            if (p <= (0.5 - 0.25)) {
+                uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),0.3948*cos(theta),0.3948*sin(theta),1.57});
+            } else if (p <= (0.5 - 0.1) && p > (0.5 - 0.25)) {
                 uInit[i][j] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,0,1});
-            } else if (x < 0.175){
+            } else if (p <= (0.5 + 0.1) && p > (0.5 - 0.1)) {
                 uInit[i][j] = sim.eos[0]->primToConsv({1-vf,(1-vf),rho2*vf,0,0,1});
             } else {
                 uInit[i][j] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,0,1});
             }
-                */
+                
                 
 
             // Haas + Sturtevant Shock bubble test
 
-            
-            double vf{1-(1e-6)}, rho1{1.686}, rho2{1000}, rho3{1.225};
-            // sod (x-1)*(x-1)+(y-1)*(y-1) < 0.4*0.4
-            if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
-                //uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
-                uInit[i][j] = sim.eos[0]->primToConsv({1-vf,rho3*(1-vf),rho2*vf,0,0,101325});
-                //uInit[i][j] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,0,1});
-            } else if (x>=0.225){
-                //uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
-                uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho1*(1-vf),-113.5,0,159060});
-            } else {
-                //uInit1[i][j] = sim.set_vals(1,0,0,1);
-                uInit[i][j] = sim.eos[0]->primToConsv({vf,rho3*vf,rho3*(1-vf),0,0,101325});
-            }
+            // double vf{1-(1e-9)}, rho1{1.686}, rho2{0.223}, rho3{1.225};
+            // // sod (x-1)*(x-1)+(y-1)*(y-1) < 0.4*0.4
+            // if ((x-0.175)*(x-0.175)+(y*y) < 0.025*0.025){
+            //     //uInit1[i][j] = sim.set_vals(0.1380,0,0,1);
+            //     uInit[i][j] = sim.eos[0]->primToConsv({1-vf,rho2*(1-vf),rho2*vf,0,0,101325});
+            //     //uInit[i][j] = sim.eos[0]->primToConsv({vf,vf,rho2*(1-vf),0,0,1});
+            // } else if (x>=0.225){
+            //     //uInit1[i][j] = sim.set_vals(1.3765,0.3948,0,1.57);
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho1*(1-vf),-113.5,0,159060});
+            // } else {
+            //     //uInit1[i][j] = sim.set_vals(1,0,0,1);
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,rho3*vf,rho3*(1-vf),0,0,101325});
+            // }   
+
             
 
             // water+air shock bubble
@@ -152,15 +169,25 @@ int main(){
             */
 
             // Murrone & Guillard water-air interface
-            /*
-            double vf{1-(1e-8)}, rho1{1000}, rho2{50};
+            
+            // double vf{1-(1e-8)}, rho1{1000}, rho2{50};
 
-            if (x < 0.7){
-                uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),0,0,1e9});
-            } else {
-                uInit[i][j] = sim.eos[0]->primToConsv({1-vf,rho1*(1-vf),rho2*vf,0,0,1e5});
-            }
-            */
+            // if (x < 0.7){
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),0,0,1e9});
+            // } else {
+            //     uInit[i][j] = sim.eos[0]->primToConsv({1-vf,rho1*(1-vf),rho2*vf,0,0,1e5});
+            // }
+
+            // air bubble in water
+
+            // double vf{1-(1e-8)}, rho1{1}, rho2{1000};
+            // if (x < 0){
+            //     uInit[i][j] = sim.eos[0]->primToConsv({1-vf,rho1*(1-vf),rho2*vf,0,0,1e5});
+            // } else if (x < 0.7){
+            //     uInit[i][j] = sim.eos[0]->primToConsv({vf,rho1*vf,rho2*(1-vf),-0,0,1e5});
+            // } else {
+            //     uInit[i][j] = sim.eos[0]->primToConsv({1-vf,rho1*(1-vf),rho2*vf,-0,0,1e5});
+            // }
 
                 
             

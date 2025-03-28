@@ -125,7 +125,6 @@ void solver::runGFM(){
         
     } while (time < endTime);
     std::cout << "simulation finished" << std::endl;
-    writeData();
 };
 
 void solver::run(){
@@ -190,6 +189,53 @@ void solver::run(){
     } while (time < endTime);
     std::cout << "simulation finished" << std::endl;
     writeData();
+};
+
+void solver::setDt(){
+    double aMax = -1e14;
+    std::cout << "setting dt" << std::endl;
+    for (size_t i = nG; i < fluid1.u.size()-nG; ++i) {
+        for (size_t j = nG; j < fluid1.u[0].size()-nG; ++j) {
+            //aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(f.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(f.u[i][j])[UY],2)) + eos[0]->calcSoundSpeed(eos[0]->consvToPrim(f.u[i][j])));
+            if (phi[i][j] <= 0){
+                aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(fluid1.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(fluid1.u[i][j])[UY],2))+eos[0]->calcSoundSpeed(eos[0]->consvToPrim(fluid1.u[i][j])));
+            } else {
+                aMax = std::max(aMax, std::sqrt(pow(eos[1]->consvToPrim(fluid2.u[i][j])[UX],2)+pow(eos[1]->consvToPrim(fluid2.u[i][j])[UY],2))+eos[1]->calcSoundSpeed(eos[1]->consvToPrim(fluid2.u[i][j])));
+            }
+        }
+    }
+
+    dtReducer = (splitFlip < 20) ? 0.5 : 1.0;
+
+    dt = dtReducer * cour * std::min(dx,dy) / std::fabs(aMax);
+
+    std::cout << "set dt" << std::endl;
+
+    std::cout << "aMax =" << aMax << std::endl;
+
+
+    double writeTime = writeInterval*(std::floor((time+1e-9) / writeInterval)+1);
+
+    if (endTime - time <= dt && writeTime-time >= dt){
+        dt = endTime - time;
+        assert(dt != 0);
+        time = endTime;
+        std::cout << "last step:" << dt << std::endl;
+    } else if (writeTime-time <= dt && writeTime-time > 0){ // manually reducing dt to hit the write times
+        dt = writeTime - time;
+        assert(dt != 0);
+        time = writeTime;
+    } else {
+        time = time + dt;
+    }
+
+    if (std::fabs(writeTime - time) < 1e-9){
+        checkWrite = 1;
+    } else {
+        checkWrite = 0;
+    }
+    // std::cout << "dt is" << dt << std::endl;
+
 };
 
 void solver::findBoundary(){ // checks for change in sign of level set. emplaces indices of cell with phi <= 0.
@@ -278,137 +324,6 @@ void solver::findBoundary(){ // checks for change in sign of level set. emplaces
     }
         */
 
-}
-
-void solver::printInterfaceArrays(std::vector<std::vector<double>> field, fluid& f, const std::string& filename) {
-    // === Original arrays: ones, interface normals, and p ===
-    std::vector<std::vector<double>> onesArray = field;
-    std::vector<std::vector<double>> interfaceXArray = field;
-    std::vector<std::vector<double>> interfaceYArray = field;
-    std::vector<std::vector<double>> pArray = field;
-    
-    for (auto& row : onesArray)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceXArray)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceYArray)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : pArray)
-        std::fill(row.begin(), row.end(), 0.0);
-    
-    // === Interface states arrays (8 arrays) ===
-    // f.interfaceStates[i] is a std::array<std::array<double,4>,2>
-    // We'll create two sets of 4 arrays.
-    std::vector<std::vector<double>> interfaceState0_0 = field;
-    std::vector<std::vector<double>> interfaceState0_1 = field;
-    std::vector<std::vector<double>> interfaceState0_2 = field;
-    std::vector<std::vector<double>> interfaceState0_3 = field;
-    
-    std::vector<std::vector<double>> interfaceState1_0 = field;
-    std::vector<std::vector<double>> interfaceState1_1 = field;
-    std::vector<std::vector<double>> interfaceState1_2 = field;
-    std::vector<std::vector<double>> interfaceState1_3 = field;
-    
-    for (auto& row : interfaceState0_0)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState0_1)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState0_2)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState0_3)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState1_0)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState1_1)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState1_2)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : interfaceState1_3)
-        std::fill(row.begin(), row.end(), 0.0);
-    
-    // === Star states arrays (4 arrays) ===
-    // f.starStates[i] is a std::array<double,4>
-    std::vector<std::vector<double>> starState0 = field;
-    std::vector<std::vector<double>> starState1 = field;
-    std::vector<std::vector<double>> starState2 = field;
-    std::vector<std::vector<double>> starState3 = field;
-    
-    for (auto& row : starState0)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : starState1)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : starState2)
-        std::fill(row.begin(), row.end(), 0.0);
-    for (auto& row : starState3)
-        std::fill(row.begin(), row.end(), 0.0);
-    
-    // === Fill arrays at interface cell locations ===
-    // f.interfaceCells[i] gives the row and col for the i-th interface cell.
-    for (int i = 0; i < f.interfaceCells.size(); ++i) {
-        int r = f.interfaceCells[i][0];
-        int c = f.interfaceCells[i][1];
-        
-        // Original arrays:
-        onesArray[r][c] = 1.0;
-        interfaceXArray[r][c] = f.interfaceNormals[i][0];
-        interfaceYArray[r][c] = f.interfaceNormals[i][1];
-        pArray[r][c] = f.u[r][c][3];
-        
-        // Interface states: for each cell, there are two sets (index 0 and 1) of 4 variables.
-        interfaceState0_0[r][c] = f.interfaceStates[i][0][0];
-        interfaceState0_1[r][c] = f.interfaceStates[i][0][1];
-        interfaceState0_2[r][c] = f.interfaceStates[i][0][2];
-        interfaceState0_3[r][c] = f.interfaceStates[i][0][3];
-        
-        interfaceState1_0[r][c] = f.interfaceStates[i][1][0];
-        interfaceState1_1[r][c] = f.interfaceStates[i][1][1];
-        interfaceState1_2[r][c] = f.interfaceStates[i][1][2];
-        interfaceState1_3[r][c] = f.interfaceStates[i][1][3];
-        
-        // Star states: 4 variables per cell.
-        starState0[r][c] = f.starStates[i][0];
-        starState1[r][c] = f.starStates[i][1];
-        starState2[r][c] = f.starStates[i][2];
-        starState3[r][c] = f.starStates[i][3];
-    }
-    
-    // === Write each array to a file ===
-    auto writeArrayToFile = [](const std::vector<std::vector<double>>& arr, const std::string& fname) {
-        std::ofstream outFile(fname);
-        if (outFile.is_open()) {
-            for (const auto& row : arr) {
-                for (const auto& value : row)
-                    outFile << std::fixed << std::setprecision(2) << value << " ";
-                outFile << std::endl;
-            }
-            outFile.close();
-        } else {
-            std::cerr << "Unable to open file: " << fname << std::endl;
-        }
-    };
-    
-    // Original files:
-    writeArrayToFile(onesArray, filename + "_ones.txt");
-    writeArrayToFile(interfaceXArray, filename + "_x.txt");
-    writeArrayToFile(interfaceYArray, filename + "_y.txt");
-    writeArrayToFile(pArray, filename + "_p.txt");
-    
-    // Interface state files (8 files)
-    writeArrayToFile(interfaceState0_0, filename + "_interfaceState0_0.txt");
-    writeArrayToFile(interfaceState0_1, filename + "_interfaceState0_1.txt");
-    writeArrayToFile(interfaceState0_2, filename + "_interfaceState0_2.txt");
-    writeArrayToFile(interfaceState0_3, filename + "_interfaceState0_3.txt");
-    
-    writeArrayToFile(interfaceState1_0, filename + "_interfaceState1_0.txt");
-    writeArrayToFile(interfaceState1_1, filename + "_interfaceState1_1.txt");
-    writeArrayToFile(interfaceState1_2, filename + "_interfaceState1_2.txt");
-    writeArrayToFile(interfaceState1_3, filename + "_interfaceState1_3.txt");
-    
-    // Star state files (4 files)
-    writeArrayToFile(starState0, filename + "_starState0.txt");
-    writeArrayToFile(starState1, filename + "_starState1.txt");
-    writeArrayToFile(starState2, filename + "_starState2.txt");
-    writeArrayToFile(starState3, filename + "_starState3.txt");
 }
 
 
@@ -1533,82 +1448,7 @@ void solver::phiUpdate(int splitFlip){
     double uVal;
 
     phiOld = phi;
-    // if (splitFlip%2 == 0){
-    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){
-    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
-    //             if (phi[i][j] <= 0){
-    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
-    //             } else {
-    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
-    //             }
 
-    //             if (uVal >= 0){
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
-    //             } else {
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-    //             }
-    //         }
-    //     }
-
-    //     phi = phiPlus1;
-    //     phiBC();
-    //     //print_arr(u,RHO);
-    //     //std::cout << "phiX updated" << std::endl;
-    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){ // this is the part that causes vx to grow
-    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
-    //             if (phi[i][j] <= 0){
-    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
-    //             } else {
-    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
-    //             }
-                
-    //             if (uVal >= 0){
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
-    //             } else {
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-    //             }
-    //         }
-    //     }
-
-    //     phi = phiPlus1;
-    // } else {
-    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){ // this is the part that causes vx to grow
-    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
-    //             if (phi[i][j] <= 0){
-    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UY];
-    //             } else {
-    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UY];
-    //             }
-                
-    //             if (uVal >= 0){
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i][j] - phi[i-1][j]); // flux[i + 1] and flux[i] for the update
-    //             } else {
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dy) * (phi[i+1][j] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-    //             }
-    //         }
-    //     }
-
-    //     phi = phiPlus1;
-    //     phiBC();
-
-    //     for (std::vector<double>::size_type i = nG; i < phi.size()-nG; ++i){
-    //         for (std::vector<double>::size_type j = nG; j < phi[0].size() - nG; ++j) {
-    //             if (phi[i][j] <= 0){
-    //                 uVal = eos[0]->consvToPrim(fluid1.u[i][j])[UX];
-    //             } else {
-    //                 uVal = eos[1]->consvToPrim(fluid2.u[i][j])[UX];
-    //             }
-
-    //             if (uVal >= 0){
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j] - phi[i][j-1]); // flux[i + 1] and flux[i] for the update
-    //             } else {
-    //                 phiPlus1[i][j] = phi[i][j] - uVal * (dt / dx) * (phi[i][j+1] - phi[i][j]); // flux[i + 1] and flux[i] for the update
-    //             }
-    //         }
-    //     }
-
-    //     phi = phiPlus1;
-    // }
     auto updatePhi = [&](bool xDir) {
         // Choose the appropriate time-space factor and index shifts.
         double factor = xDir ? (dt / dx) : (dt / dy);
@@ -1691,7 +1531,6 @@ void solver::phiMUSCLupdate(int splitFlip){
 
     // Lambda to update phi using MUSCL reconstruction with the van Leer limiter.
     auto updatePhi = [&](bool xDir) {
-        // Determine the spatial factor (dt/dx or dt/dy)
         double factor = xDir ? (dt / dx) : (dt / dy);
 
         // Loop over interior cells.
@@ -1707,7 +1546,6 @@ void solver::phiMUSCLupdate(int splitFlip){
                                 : eos[1]->consvToPrim(fluid2.u[i][j])[UY];
 
                 if (xDir) {
-                    // --- x-direction update ---
                     double fluxL, fluxR;  // Left and right fluxes.
                     if (uVal >= 0) {
                         // Upwind is to the left.
@@ -1745,7 +1583,6 @@ void solver::phiMUSCLupdate(int splitFlip){
                     // Conservative update in x-direction.
                     phiPlus1[i][j] = phi[i][j] - factor * (fluxR - fluxL);
                 } else {
-                    // --- y-direction update ---
                     double fluxD, fluxU;  // Downward and upward fluxes.
                     if (uVal >= 0) {
                         // Upwind is downward.
@@ -1821,20 +1658,16 @@ void solver::neighbourAvg(fluid& f, int i, int j){
     std::array<double, 4> sum = {0.0, 0.0, 0.0, 0.0};
     int count = 0;
 
-    // Get the sign of phi at (i, j)
     bool sign = phi[i][j] >= 0.0;
 
-    // Offsets for the four neighbors
     int offsets[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
-    // Check each neighbor
     for (int k = 0; k < 4; ++k) {
         int ni = i + offsets[k][0];
         int nj = j + offsets[k][1];
 
         // Boundary check
         if (ni >= 0 && ni < static_cast<int>(phi.size()) && nj >= 0 && nj < static_cast<int>(phi[0].size())) {
-            // Check if the sign of phi is the same
             if ((phi[ni][nj] >= 0.0) == sign) {
                 sum = sum + f.u[ni][nj];  // Sum the four-vectors
                 ++count;
@@ -1844,16 +1677,12 @@ void solver::neighbourAvg(fluid& f, int i, int j){
 
     // Average and assign if there are valid neighbors
     if (count > 0) {
-        f.u[i][j] = sum / count;  // Average the four-vectors
+        f.u[i][j] = sum / count;
     } else {
         f.u[i][j] = f.u[i][j]; // ie do nothing - allow the cell to keep the ghost value until the boundary is updated next.
         //throw std::runtime_error("freshly cleared cell has no valid neighbours");
     }
 }
-
-// void solver::fixFCcell(){
-
-// }
 
 void solver::fixFreshlyCleared(){
 for (std::array<int,2> cell : freshlyCleared){
@@ -1950,18 +1779,10 @@ void solver::solveEikonalPoint(int i, int j){
     }
 }
 
-
-// Update the level-set value at an interior grid point (i,j).
-// This routine computes a new candidate value for phi[i][j] by solving
-// the quadratic equation derived from approximating |∇φ| = 1 using
-// upwind differences. The neighbors are chosen based on the sign of φ.
 void solver::updateLevelSetPoint(std::vector<std::vector<double>> &phi, int i, int j) {
     // Determine the sign of the current value
     int s = sign(phi[i][j]);
 
-    // For reinitialization we choose neighboring values using upwinding.
-    // For φ > 0, use the minimum of neighboring values;
-    // for φ < 0, use the maximum.
     double a, b;
     if (s > 0) {
         b = std::min(phi[i - 1][j], phi[i + 1][j]);
@@ -1971,9 +1792,8 @@ void solver::updateLevelSetPoint(std::vector<std::vector<double>> &phi, int i, i
         a = std::max(phi[i][j - 1], phi[i][j + 1]);
     }
 
-    // Compute coefficients for the quadratic equation:
-    //   A * new_phi^2 + B * new_phi + C = 0,
-    // where A, B, and C are derived from the finite-difference approximation:
+    // Compute coefficients for the quadratic equation
+    // A, B, and C are derived from the finite-difference approximation:
     //   ( (φ_new - a)^2 / dx^2 ) + ( (φ_new - b)^2 / dy^2 ) = 1.
     double X = 1.0 / (dx * dx);
     double Y = 1.0 / (dy * dy);
@@ -1986,9 +1806,7 @@ void solver::updateLevelSetPoint(std::vector<std::vector<double>> &phi, int i, i
 
     // If the discriminant is negative, fallback to a simple update.
     if (disc < 0) {
-        // Here we simply take the neighbor with smaller absolute value and add a fixed increment.
-        //phi_new = std::min(a, b) + s / sqrt(A);
-        //phi_new = (s > 0) ? std::min(a, b) + 1.0 / sqrt(A) : std::max(a, b) - 1.0 / sqrt(A);
+
         if (fabs(a) > fabs(b)){
             phi_new = (s > 0) ? b+dy : b-dy;
         } else {
@@ -2005,16 +1823,13 @@ void solver::updateLevelSetPoint(std::vector<std::vector<double>> &phi, int i, i
         }
     }
 
-    // Update only if the new value is closer to zero,
-    // so that the solution converges toward a signed distance function.
     if (fabs(phi_new) < fabs(phi[i][j])) {
         phi[i][j] = phi_new;
     }
 }
 
 // Reinitializes the level set phi using a fast sweeping method.
-// The function performs maxIter sweeps over the interior of the domain.
-// Boundary values are kept fixed.
+
 void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int maxIter) {
     int m = phi.size();
     if (m == 0)
@@ -2036,7 +1851,6 @@ void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int max
 
     // Loop over iterations
     for (int iter = 0; iter < maxIter; iter++) {
-        // Sweep 1: top-left to bottom-right
         for (int i = nG; i < m - nG; i++) {
             for (int j = nG; j < n - nG; j++) {
                 if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
@@ -2045,7 +1859,6 @@ void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int max
                 }
             }
         }
-        // Sweep 4: bottom-left to top-right
         for (int i = m - nG - 1; i >= nG; i--) {
             for (int j = nG; j < n - nG; j++) {
                 if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
@@ -2054,7 +1867,6 @@ void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int max
                 }
             }
         }
-        // Sweep 2: bottom-right to top-left
         for (int i = m - nG - 1; i >= nG; i--) {
             for (int j = n - nG -1; j >= nG; j--) {
                 if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
@@ -2063,7 +1875,6 @@ void solver::reinitialiseLevelSet(std::vector<std::vector<double>> &phi, int max
                 }
             }
         }
-        // Sweep 3: top-right to bottom-left
         for (int i = nG; i < m - nG; i++) {
             for (int j = n - nG - 1; j >= nG; j--) {
                 if (std::signbit(phi[i][j]) == std::signbit(phi[i][j+1]) && std::signbit(phi[i][j]) == std::signbit(phi[i][j-1])
@@ -2323,6 +2134,137 @@ std::array<double,4> solver::set_vals(int fluid1, double rho, double vx, double 
     return result;
 };
 
+void solver::printInterfaceArrays(std::vector<std::vector<double>> field, fluid& f, const std::string& filename) {
+    // Original arrays: ones, interface normals, and p
+    std::vector<std::vector<double>> onesArray = field;
+    std::vector<std::vector<double>> interfaceXArray = field;
+    std::vector<std::vector<double>> interfaceYArray = field;
+    std::vector<std::vector<double>> pArray = field;
+    
+    for (auto& row : onesArray)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceXArray)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceYArray)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : pArray)
+        std::fill(row.begin(), row.end(), 0.0);
+    
+    // Interface states arrays (8 arrays)
+    // f.interfaceStates[i] is a std::array<std::array<double,4>,2>
+    // We'll create two sets of 4 arrays.
+    std::vector<std::vector<double>> interfaceState0_0 = field;
+    std::vector<std::vector<double>> interfaceState0_1 = field;
+    std::vector<std::vector<double>> interfaceState0_2 = field;
+    std::vector<std::vector<double>> interfaceState0_3 = field;
+    
+    std::vector<std::vector<double>> interfaceState1_0 = field;
+    std::vector<std::vector<double>> interfaceState1_1 = field;
+    std::vector<std::vector<double>> interfaceState1_2 = field;
+    std::vector<std::vector<double>> interfaceState1_3 = field;
+    
+    for (auto& row : interfaceState0_0)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState0_1)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState0_2)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState0_3)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState1_0)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState1_1)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState1_2)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : interfaceState1_3)
+        std::fill(row.begin(), row.end(), 0.0);
+    
+    // Star states arrays (4 arrays)
+    // f.starStates[i] is a std::array<double,4>
+    std::vector<std::vector<double>> starState0 = field;
+    std::vector<std::vector<double>> starState1 = field;
+    std::vector<std::vector<double>> starState2 = field;
+    std::vector<std::vector<double>> starState3 = field;
+    
+    for (auto& row : starState0)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : starState1)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : starState2)
+        std::fill(row.begin(), row.end(), 0.0);
+    for (auto& row : starState3)
+        std::fill(row.begin(), row.end(), 0.0);
+    
+    // Fill arrays at interface cell locations
+    // f.interfaceCells[i] gives the row and col for the i-th interface cell.
+    for (int i = 0; i < f.interfaceCells.size(); ++i) {
+        int r = f.interfaceCells[i][0];
+        int c = f.interfaceCells[i][1];
+        
+        // Original arrays:
+        onesArray[r][c] = 1.0;
+        interfaceXArray[r][c] = f.interfaceNormals[i][0];
+        interfaceYArray[r][c] = f.interfaceNormals[i][1];
+        pArray[r][c] = f.u[r][c][3];
+        
+        // Interface states: for each cell, there are two sets (index 0 and 1) of 4 variables.
+        interfaceState0_0[r][c] = f.interfaceStates[i][0][0];
+        interfaceState0_1[r][c] = f.interfaceStates[i][0][1];
+        interfaceState0_2[r][c] = f.interfaceStates[i][0][2];
+        interfaceState0_3[r][c] = f.interfaceStates[i][0][3];
+        
+        interfaceState1_0[r][c] = f.interfaceStates[i][1][0];
+        interfaceState1_1[r][c] = f.interfaceStates[i][1][1];
+        interfaceState1_2[r][c] = f.interfaceStates[i][1][2];
+        interfaceState1_3[r][c] = f.interfaceStates[i][1][3];
+        
+        // Star states: 4 variables per cell.
+        starState0[r][c] = f.starStates[i][0];
+        starState1[r][c] = f.starStates[i][1];
+        starState2[r][c] = f.starStates[i][2];
+        starState3[r][c] = f.starStates[i][3];
+    }
+    
+    // === Write each array to a file ===
+    auto writeArrayToFile = [](const std::vector<std::vector<double>>& arr, const std::string& fname) {
+        std::ofstream outFile(fname);
+        if (outFile.is_open()) {
+            for (const auto& row : arr) {
+                for (const auto& value : row)
+                    outFile << std::fixed << std::setprecision(2) << value << " ";
+                outFile << std::endl;
+            }
+            outFile.close();
+        } else {
+            std::cerr << "Unable to open file: " << fname << std::endl;
+        }
+    };
+    
+    // Original files:
+    writeArrayToFile(onesArray, filename + "_ones.txt");
+    writeArrayToFile(interfaceXArray, filename + "_x.txt");
+    writeArrayToFile(interfaceYArray, filename + "_y.txt");
+    writeArrayToFile(pArray, filename + "_p.txt");
+    
+    // Interface state files (8 files)
+    writeArrayToFile(interfaceState0_0, filename + "_interfaceState0_0.txt");
+    writeArrayToFile(interfaceState0_1, filename + "_interfaceState0_1.txt");
+    writeArrayToFile(interfaceState0_2, filename + "_interfaceState0_2.txt");
+    writeArrayToFile(interfaceState0_3, filename + "_interfaceState0_3.txt");
+    
+    writeArrayToFile(interfaceState1_0, filename + "_interfaceState1_0.txt");
+    writeArrayToFile(interfaceState1_1, filename + "_interfaceState1_1.txt");
+    writeArrayToFile(interfaceState1_2, filename + "_interfaceState1_2.txt");
+    writeArrayToFile(interfaceState1_3, filename + "_interfaceState1_3.txt");
+    
+    // Star state files (4 files)
+    writeArrayToFile(starState0, filename + "_starState0.txt");
+    writeArrayToFile(starState1, filename + "_starState1.txt");
+    writeArrayToFile(starState2, filename + "_starState2.txt");
+    writeArrayToFile(starState3, filename + "_starState3.txt");
+}
+
 void solver::print_arr(std::vector< std::array<double,4> > arr, int var){
     for (std::vector<double>::size_type i = 0; i < arr.size(); ++i) {
         std::cout << arr[i][var] << " ";
@@ -2337,53 +2279,6 @@ void solver::print_vect(std::array<double,4> v){
     }
     std::cout << std::endl;
 }
-
-void solver::setDt(){
-    double aMax = -1e14;
-    std::cout << "setting dt" << std::endl;
-    for (size_t i = nG; i < fluid1.u.size()-nG; ++i) {
-        for (size_t j = nG; j < fluid1.u[0].size()-nG; ++j) {
-            //aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(f.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(f.u[i][j])[UY],2)) + eos[0]->calcSoundSpeed(eos[0]->consvToPrim(f.u[i][j])));
-            if (phi[i][j] <= 0){
-                aMax = std::max(aMax, std::sqrt(pow(eos[0]->consvToPrim(fluid1.u[i][j])[UX],2)+pow(eos[0]->consvToPrim(fluid1.u[i][j])[UY],2))+eos[0]->calcSoundSpeed(eos[0]->consvToPrim(fluid1.u[i][j])));
-            } else {
-                aMax = std::max(aMax, std::sqrt(pow(eos[1]->consvToPrim(fluid2.u[i][j])[UX],2)+pow(eos[1]->consvToPrim(fluid2.u[i][j])[UY],2))+eos[1]->calcSoundSpeed(eos[1]->consvToPrim(fluid2.u[i][j])));
-            }
-        }
-    }
-
-    dtReducer = (splitFlip < 20) ? 0.5 : 1.0;
-
-    dt = dtReducer * cour * std::min(dx,dy) / std::fabs(aMax);
-
-    std::cout << "set dt" << std::endl;
-
-    std::cout << "aMax =" << aMax << std::endl;
-
-
-    double writeTime = writeInterval*(std::floor((time+1e-9) / writeInterval)+1);
-
-    if (endTime - time <= dt && writeTime-time >= dt){
-        dt = endTime - time;
-        assert(dt != 0);
-        time = endTime;
-        std::cout << "last step:" << dt << std::endl;
-    } else if (writeTime-time <= dt && writeTime-time > 0){ // manually reducing dt to hit the write times
-        dt = writeTime - time;
-        assert(dt != 0);
-        time = writeTime;
-    } else {
-        time = time + dt;
-    }
-
-    if (std::fabs(writeTime - time) < 1e-9){
-        checkWrite = 1;
-    } else {
-        checkWrite = 0;
-    }
-    // std::cout << "dt is" << dt << std::endl;
-
-};
 
 // ---------------------- Constructor ------------------------ //
 solver::solver(double x_0, double x_1, double y_0, double y_1, double t0, double t1, int n_CellsX, int n_CellsY, int n_Ghosts, double c)
